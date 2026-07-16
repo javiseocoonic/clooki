@@ -90,14 +90,18 @@ export async function cargarMiSemana(
   const proyectos = proyectosRes.data ?? [];
   const horas = horasRes.data ?? [];
   const recientes = recientesRes.data ?? [];
+  const sesiones = sesionesRes.data ?? [];
 
   const clientesPorId = new Map(clientes.map((c) => [c.id, c]));
   const proyectosPorId = new Map(proyectos.map((p) => [p.id, p]));
 
-  // Líneas = proyectos con horas esta semana ∪ proyectos con horas recientes.
+  // Líneas = proyectos con horas esta semana ∪ con horas recientes ∪ con
+  // cronómetro activo (una sesión en marcha aún no tiene horas volcadas,
+  // pero su línea debe verse al recargar — brief §11.3.e).
   const idsLineas = new Set<string>([
     ...horas.map((h) => h.proyecto_id),
     ...recientes.map((r) => r.proyecto_id),
+    ...sesiones.map((s) => s.proyecto_id),
   ]);
 
   const lineas: ProyectoConCliente[] = [...idsLineas]
@@ -130,6 +134,6 @@ export async function cargarMiSemana(
     lineas,
     horas,
     diasSinHorasSemanaAnterior,
-    sesiones: sesionesRes.data ?? [],
+    sesiones,
   };
 }
