@@ -28,6 +28,8 @@ import type {
 } from "@/lib/tipos";
 import type { ProyectoConCliente } from "@/lib/datos/mi-semana";
 import { AnadirLinea } from "./anadir-linea";
+import { EntradaNatural } from "./entrada-natural";
+import type { PropuestaHoras } from "@/app/acciones-ia";
 import {
   duracionMs,
   formatearDuracion,
@@ -204,13 +206,18 @@ export function RejillaSemana({
     proyectoId: string,
     fecha: string,
     valor: number | null,
+    notaNueva?: string,
   ) {
     const k = clave(proyectoId, fecha);
     const version = (versionesRef.current[k] ?? 0) + 1;
     versionesRef.current[k] = version;
     ponerEstado(k, "guardando");
 
-    const nota = (notas[proyectoId] ?? "").trim() || null;
+    const nota = (notaNueva ?? notas[proyectoId] ?? "").trim() || null;
+    if (notaNueva !== undefined) {
+      setNotas((prev) => ({ ...prev, [proyectoId]: notaNueva }));
+      setNotasGuardadas((prev) => ({ ...prev, [proyectoId]: notaNueva }));
+    }
     const ejecutar = async (): Promise<boolean> => {
       if (valor === null) {
         const { error } = await supabase
@@ -483,6 +490,79 @@ export function RejillaSemana({
           ? ` · ${omitidas} omitida${omitidas === 1 ? "" : "s"}: cronómetro en marcha`
           : ""),
       3000,
+    );
+  }
+
+  // ── Entrada por lenguaje natural (fase IA·3): aplicar confirmadas ──
+
+  async function aplicarPropuestas(props: PropuestaHoras[]) {
+    let aplicadas = 0;
+    let fuera = 0;
+    let omitidas = 0;
+
+    for (const p of props) {
+      if (sesionEnCelda(p.proyecto_id, p.fecha)) {
+        omitidas++; // celda con cronómetro en marcha: no se pisa
+        continue;
+      }
+
+      if (dias.includes(p.fecha)) {
+        // Semana visible: mismo camino que la edición manual.
+        if (!lineasVisiblesRef.current.some((l) => l.id === p.proyecto_id)) {
+          const c = clientes.find((cl) =>
+            cl.proyectos.some((pr) => pr.id === p.proyecto_id),
+          );
+          const pr = c?.proyectos.find((pr) => pr.id === p.proyecto_id);
+          if (c && pr) {
+            anadirLineas([
+              { ...pr, cliente: { id: c.id, nombre: c.nombre, activo: c.activo } },
+            ]);
+          }
+        }
+        const k = clave(p.proyecto_id, p.fecha);
+        const base = guardadasRef.current[k] ?? 0;
+        const valor = p.sumar
+          ? Math.min(24, redondearAPaso(base + p.horas))
+          : p.horas;
+        ponerValor(k, formatearHoras(valor));
+        await guardarCelda(p.proyecto_id, p.fecha, valor, p.nota ?? undefined);
+        aplicadas++;
+      } else {
+        // Fuera de la semana visible: escritura directa (mismo upsert).
+        let valor = p.horas;
+        if (p.sumar) {
+          const { data } = await supabase
+            .from("horas")
+            .select("horas")
+            .eq("persona_id", personaId)
+            .eq("proyecto_id", p.proyecto_id)
+            .eq("fecha", p.fecha)
+            .maybeSingle();
+          valor = Math.min(24, redondearAPaso((data?.horas ?? 0) + p.horas));
+        }
+        const { error } = await supabase.from("horas").upsert(
+          {
+            persona_id: personaId,
+            proyecto_id: p.proyecto_id,
+            fecha: p.fecha,
+            horas: valor,
+            nota: p.nota,
+          },
+          { onConflict: "persona_id,proyecto_id,fecha" },
+        );
+        if (error) omitidas++;
+        else {
+          aplicadas++;
+          fuera++;
+        }
+      }
+    }
+
+    mostrarBadge(
+      `Apuntada${aplicadas === 1 ? "" : "s"} ${aplicadas} celda${aplicadas === 1 ? "" : "s"}` +
+        (fuera > 0 ? ` · ${fuera} fuera de la semana visible` : "") +
+        (omitidas > 0 ? ` · ${omitidas} sin aplicar` : ""),
+      4000,
     );
   }
 
@@ -847,6 +927,8 @@ export function RejillaSemana({
 
   return (
     <div>
+      <EntradaNatural alAplicar={aplicarPropuestas} />
+
       {/* Indicador global (transitorio; errores y offline persisten) */}
       <div
         className="mb-2 flex min-h-6 items-center justify-end gap-2 text-xs"

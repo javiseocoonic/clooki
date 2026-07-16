@@ -29,10 +29,13 @@ empleados: sin cuotas ni objetivos de horas.
    observaciones en prosa (subidas/bajadas por cliente, propuestas que acumulan
    horas sin firmar, % de datos apuntados con retraso). Bajo demanda, una
    llamada por clic; sin coste recurrente.
-3. **Entrada en lenguaje natural en la app** — caja de texto sobre la rejilla:
-   "ayer 3h viamed rrss y 2 en capitalidad" → celdas propuestas con **vista
-   previa confirmable** (la IA propone, la persona confirma; nunca escritura
-   directa). Para quien rellena de memoria o desde el móvil.
+3. **Entrada en lenguaje natural en la app** — ✅ jul 2026, adelantada:
+   el equipo comparte una sola cuenta de claude.ai, así que los conectores
+   MCP personales no sirven para todos — la caja en la propia app resuelve la
+   identidad con el login de Clooki. "ayer 3h viamed rrss" → propuestas con
+   **vista previa confirmable** (la IA propone, la persona confirma). Requiere
+   `ANTHROPIC_API_KEY` (clave de empresa) en Vercel; modelo `claude-opus-4-8`
+   con salida estructurada (~1 céntimo por frase).
 4. **Síntesis de notas por cliente** — resumen mensual en prosa de en qué se
    fueron las horas de un cliente, a partir de las notas de línea. Esperar a
    que haya notas reales antes de construirlo.

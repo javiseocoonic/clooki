@@ -32,6 +32,14 @@ Variables de entorno en `.env.local` (ver `.env.example`).
 3. El acceso está restringido a correos `@coonic.com` en el login; quien no
    tenga fila activa en `personas` no ve ningún dato (RLS).
 
+## Entrada por lenguaje natural (en la app)
+
+La caja sobre la rejilla interpreta frases («ayer 3h en Viamed rrss») y
+propone celdas que se confirman antes de guardar. Identidad = sesión de
+Clooki (sin cuentas de Claude por persona). Requiere la variable
+`ANTHROPIC_API_KEY` (clave de empresa) en Vercel — sin ella la caja muestra
+un aviso y el resto de la app funciona igual.
+
 ## Conexión con Claude (MCP)
 
 Cada persona genera su token en **/conexion-ia** (actúa en su nombre, con
