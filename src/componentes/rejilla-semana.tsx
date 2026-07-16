@@ -2,6 +2,7 @@
 
 import {
   Fragment,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -11,17 +12,19 @@ import { crearClienteNavegador } from "@/lib/supabase/navegador";
 import {
   DIAS_SEMANA,
   NOMBRES_DIA,
+  PASO_HORAS,
   aIso,
   diasDeSemana,
   etiquetaDia,
   formatearHoras,
   interpretarHoras,
+  redondearAPaso,
 } from "@/lib/semana";
 import type { Cliente, Proyecto, RegistroHoras } from "@/lib/tipos";
 import type { ProyectoConCliente } from "@/lib/datos/mi-semana";
 import { AnadirLinea } from "./anadir-linea";
 
-type EstadoCelda = "guardando" | "error" | "invalido";
+type EstadoCelda = "guardando" | "error" | "invalido" | "confirmado";
 
 interface Props {
   personaId: string;
@@ -31,14 +34,30 @@ interface Props {
   horas: RegistroHoras[];
 }
 
-// "Hoy" solo se conoce con certeza en el cliente (zona horaria del usuario):
-// en servidor/hidratación devuelve null y tras montar, la fecha local.
+// "Hoy" solo se conoce con certeza en el cliente (zona horaria del usuario).
 const sinSuscripcion = () => () => {};
 function useHoy(): string | null {
   return useSyncExternalStore(
     sinSuscripcion,
     () => aIso(new Date()),
     () => null,
+  );
+}
+
+// Conexión: true en servidor/hidratación, luego navigator.onLine en vivo.
+function suscribirConexion(cb: () => void) {
+  window.addEventListener("online", cb);
+  window.addEventListener("offline", cb);
+  return () => {
+    window.removeEventListener("online", cb);
+    window.removeEventListener("offline", cb);
+  };
+}
+function useConectado(): boolean {
+  return useSyncExternalStore(
+    suscribirConexion,
+    () => navigator.onLine,
+    () => true,
   );
 }
 
@@ -49,7 +68,6 @@ function clave(proyectoId: string, fecha: string): string {
 
 function notasIniciales(horas: RegistroHoras[]): Record<string, string> {
   const notas: Record<string, string> = {};
-  // La más reciente por línea gana.
   const ordenadas = [...horas].sort((a, b) =>
     a.actualizado_en.localeCompare(b.actualizado_en),
   );
@@ -58,6 +76,8 @@ function notasIniciales(horas: RegistroHoras[]): Record<string, string> {
   }
   return notas;
 }
+
+const AYUDA_PASOS = "Usa pasos de 0,25, entre 0,25 y 24.";
 
 export function RejillaSemana({
   personaId,
@@ -70,11 +90,16 @@ export function RejillaSemana({
   const dias = useMemo(() => diasDeSemana(lunesIso), [lunesIso]);
   const tablaRef = useRef<HTMLDivElement>(null);
   const versionesRef = useRef<Record<string, number>>({});
+  const debouncesRef = useRef<Record<string, ReturnType<typeof setTimeout>>>(
+    {},
+  );
+  const badgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Estado fuente de la rejilla (se reinicializa por semana vía key) ──
+  // ── Estado fuente (se reinicializa por semana vía key en el padre) ──
   const [valores, setValores] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {};
-    for (const h of horas) m[clave(h.proyecto_id, h.fecha)] = formatearHoras(h.horas);
+    for (const h of horas)
+      m[clave(h.proyecto_id, h.fecha)] = formatearHoras(h.horas);
     return m;
   });
   const [guardadas, setGuardadas] = useState<Record<string, number>>(() => {
@@ -82,10 +107,18 @@ export function RejillaSemana({
     for (const h of horas) m[clave(h.proyecto_id, h.fecha)] = h.horas;
     return m;
   });
-  const [estadoCeldas, setEstadoCeldas] = useState<Record<string, EstadoCelda>>({});
-  const [notas, setNotas] = useState<Record<string, string>>(() => notasIniciales(horas));
-  const [notasGuardadas, setNotasGuardadas] = useState<Record<string, string>>(() =>
+  // Espejos para leer el último valor desde timeouts/listeners sin closures rancias.
+  const valoresRef = useRef(valores);
+  const guardadasRef = useRef(guardadas);
+
+  const [estadoCeldas, setEstadoCeldas] = useState<
+    Record<string, EstadoCelda>
+  >({});
+  const [notas, setNotas] = useState<Record<string, string>>(() =>
     notasIniciales(horas),
+  );
+  const [notasGuardadas, setNotasGuardadas] = useState<Record<string, string>>(
+    () => notasIniciales(horas),
   );
   const [notasAbiertas, setNotasAbiertas] = useState<Set<string>>(new Set());
   const [extras, setExtras] = useState<ProyectoConCliente[]>([]);
@@ -93,11 +126,14 @@ export function RejillaSemana({
   const [verFinde, setVerFinde] = useState(() =>
     horas.some((h) => h.fecha === dias[5] || h.fecha === dias[6]),
   );
-  const [huboGuardado, setHuboGuardado] = useState(false);
+  const [badge, setBadge] = useState<string | null>(null);
+  const [lineasNuevas, setLineasNuevas] = useState<Set<string>>(new Set());
+  const pendienteFocoRef = useRef<string | null>(null);
+  const autoenfocadoRef = useRef(false);
+
   const hoy = useHoy();
+  const conectado = useConectado();
   const [diaMovilElegido, setDiaMovilElegido] = useState<string | null>(null);
-  // Hasta que el usuario elija un día, en móvil se muestra hoy (si cae en
-  // la semana visible) o el lunes.
   const diaMovil =
     diaMovilElegido ?? (hoy && dias.includes(hoy) ? hoy : dias[0]);
 
@@ -112,12 +148,15 @@ export function RejillaSemana({
   const indicesVisibles = verFinde ? [0, 1, 2, 3, 4, 5, 6] : [0, 1, 2, 3, 4];
   const hayHorasFinde = dias
     .slice(5)
-    .some((f) => lineasVisibles.some((l) => guardadas[clave(l.id, f)] !== undefined));
+    .some((f) =>
+      lineasVisibles.some((l) => guardadas[clave(l.id, f)] !== undefined),
+    );
 
-  // ── Autoguardado ──
+  // ── Estado por celda ──
 
   function ponerEstado(k: string, estado?: EstadoCelda) {
     setEstadoCeldas((prev) => {
+      if (!estado && !(k in prev)) return prev;
       const s = { ...prev };
       if (estado) s[k] = estado;
       else delete s[k];
@@ -125,7 +164,19 @@ export function RejillaSemana({
     });
   }
 
-  async function guardarCelda(proyectoId: string, fecha: string, valor: number | null) {
+  function mostrarBadge(texto: string, ms = 1900) {
+    if (badgeTimerRef.current) clearTimeout(badgeTimerRef.current);
+    setBadge(texto);
+    badgeTimerRef.current = setTimeout(() => setBadge(null), ms);
+  }
+
+  // ── Autoguardado ──
+
+  async function guardarCelda(
+    proyectoId: string,
+    fecha: string,
+    valor: number | null,
+  ) {
     const k = clave(proyectoId, fecha);
     const version = (versionesRef.current[k] ?? 0) + 1;
     versionesRef.current[k] = version;
@@ -150,7 +201,7 @@ export function RejillaSemana({
     };
 
     let ok = await ejecutar();
-    if (!ok && versionesRef.current[k] === version) ok = await ejecutar(); // reintento automático
+    if (!ok && versionesRef.current[k] === version) ok = await ejecutar();
     if (versionesRef.current[k] !== version) return; // llegó una edición posterior
 
     if (ok) {
@@ -158,50 +209,121 @@ export function RejillaSemana({
         const s = { ...prev };
         if (valor === null) delete s[k];
         else s[k] = valor;
+        guardadasRef.current = s;
         return s;
       });
-      ponerEstado(k);
-      setHuboGuardado(true);
+      ponerEstado(k, "confirmado");
+      setTimeout(() => {
+        setEstadoCeldas((prev) => {
+          if (prev[k] !== "confirmado") return prev;
+          const s = { ...prev };
+          delete s[k];
+          return s;
+        });
+      }, 900);
+      mostrarBadge("Guardado ✓");
     } else {
       ponerEstado(k, "error");
     }
   }
 
-  function alSalirDeCelda(proyectoId: string, fecha: string) {
+  /**
+   * Valida y persiste lo que haya escrito en la celda.
+   * `normalizar` = true en blur (reformatea "1:30"→"1,5" y marca inválidos);
+   * false en el debounce (guarda en silencio sin tocar lo que se teclea).
+   */
+  function persistirCelda(
+    proyectoId: string,
+    fecha: string,
+    normalizar: boolean,
+  ) {
     const k = clave(proyectoId, fecha);
-    const texto = valores[k] ?? "";
+    const texto = valoresRef.current[k] ?? "";
     const resultado = interpretarHoras(texto);
 
     if (resultado === "error") {
-      ponerEstado(k, "invalido");
-      return; // no se guarda ni se borra lo escrito
+      if (normalizar) ponerEstado(k, "invalido");
+      return;
     }
 
     if (resultado === null) {
-      if (texto !== "") setValores((prev) => ({ ...prev, [k]: "" }));
-      if (guardadas[k] === undefined) {
-        ponerEstado(k);
+      if (normalizar && texto !== "") ponerValor(k, "");
+      if (guardadasRef.current[k] === undefined) {
+        if (normalizar) ponerEstado(k);
         return;
       }
       void guardarCelda(proyectoId, fecha, null);
       return;
     }
 
-    setValores((prev) => ({ ...prev, [k]: formatearHoras(resultado) }));
-    if (guardadas[k] === resultado) {
-      ponerEstado(k);
+    if (normalizar) ponerValor(k, formatearHoras(resultado));
+    if (guardadasRef.current[k] === resultado) {
+      if (normalizar) ponerEstado(k);
       return;
     }
     void guardarCelda(proyectoId, fecha, resultado);
   }
 
+  function ponerValor(k: string, texto: string) {
+    valoresRef.current = { ...valoresRef.current, [k]: texto };
+    setValores(valoresRef.current);
+  }
+
+  function cancelarDebounce(k: string) {
+    const t = debouncesRef.current[k];
+    if (t) {
+      clearTimeout(t);
+      delete debouncesRef.current[k];
+    }
+  }
+
+  function programarGuardado(proyectoId: string, fecha: string) {
+    const k = clave(proyectoId, fecha);
+    cancelarDebounce(k);
+    debouncesRef.current[k] = setTimeout(() => {
+      delete debouncesRef.current[k];
+      persistirCelda(proyectoId, fecha, false);
+    }, 800);
+  }
+
+  function alSalirDeCelda(proyectoId: string, fecha: string) {
+    cancelarDebounce(clave(proyectoId, fecha));
+    persistirCelda(proyectoId, fecha, true);
+  }
+
+  // Vaciado best-effort al ocultarse la pestaña (§12.1) + limpieza al desmontar.
+  useEffect(() => {
+    const vaciar = () => {
+      if (document.visibilityState !== "hidden") return;
+      for (const k of Object.keys(debouncesRef.current)) {
+        cancelarDebounce(k);
+        const [pid, fecha] = k.split("|");
+        persistirCelda(pid, fecha, false);
+      }
+    };
+    document.addEventListener("visibilitychange", vaciar);
+    return () => document.removeEventListener("visibilitychange", vaciar);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Al recuperar conexión, reintentar solos los guardados fallidos (§12.2).
+  const reintentarRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    const alVolver = () => reintentarRef.current();
+    window.addEventListener("online", alVolver);
+    return () => window.removeEventListener("online", alVolver);
+  }, []);
+
+  // ── Notas ──
+
   async function guardarNota(proyectoId: string) {
     const nota = (notas[proyectoId] ?? "").trim();
     if (nota === (notasGuardadas[proyectoId] ?? "")) return;
 
-    const hayRegistros = dias.some((f) => guardadas[clave(proyectoId, f)] !== undefined);
+    const hayRegistros = dias.some(
+      (f) => guardadasRef.current[clave(proyectoId, f)] !== undefined,
+    );
     if (!hayRegistros) {
-      // Nada que actualizar en BD: la nota viajará con el próximo upsert.
       setNotasGuardadas((prev) => ({ ...prev, [proyectoId]: nota }));
       return;
     }
@@ -229,7 +351,7 @@ export function RejillaSemana({
     if (ok) {
       setNotasGuardadas((prev) => ({ ...prev, [proyectoId]: nota }));
       ponerEstado(k);
-      setHuboGuardado(true);
+      mostrarBadge("Guardado ✓");
     } else {
       ponerEstado(k, "error");
     }
@@ -239,26 +361,133 @@ export function RejillaSemana({
     for (const [k, estado] of Object.entries(estadoCeldas)) {
       if (estado !== "error") continue;
       const [a, b] = k.split("|");
-      if (a === "nota") {
-        void guardarNota(b);
-      } else {
-        alSalirDeCelda(a, b);
-      }
+      if (a === "nota") void guardarNota(b);
+      else persistirCelda(a, b, true);
     }
+  }
+  useEffect(() => {
+    reintentarRef.current = reintentarErrores;
+  });
+
+  // ── Pegado tipo hoja de cálculo (§11.2) ──
+
+  function alPegar(
+    e: React.ClipboardEvent<HTMLInputElement>,
+    linea: ProyectoConCliente,
+    col: number,
+  ) {
+    const texto = e.clipboardData.getData("text").trim();
+    // Separadores de celda: tabulador, salto de línea o espacios.
+    // La coma NUNCA separa celdas: siempre es decimal (§12.6).
+    if (!/[\t\n ]/.test(texto)) return; // un solo valor → pegado nativo
+    e.preventDefault();
+
+    const trozos = texto.split(/[\t\n]+|\s+/).filter(Boolean);
+    const desde = indicesVisibles.indexOf(col);
+    if (desde === -1) return;
+
+    let guardadasOk = 0;
+    let sinGuardar = 0;
+    trozos.forEach((trozo, i) => {
+      const idxDia = indicesVisibles[desde + i];
+      if (idxDia === undefined) return; // sobrantes: se ignoran
+      const fecha = dias[idxDia];
+      const k = clave(linea.id, fecha);
+      const res = interpretarHoras(trozo);
+      if (typeof res === "number") {
+        ponerValor(k, formatearHoras(res));
+        if (guardadasRef.current[k] !== res) void guardarCelda(linea.id, fecha, res);
+        guardadasOk++;
+      } else if (res === "error") {
+        ponerValor(k, trozo);
+        ponerEstado(k, "invalido");
+        sinGuardar++;
+      }
+    });
+
+    mostrarBadge(
+      `Pegadas ${guardadasOk} celda${guardadasOk === 1 ? "" : "s"}` +
+        (sinGuardar > 0 ? ` · ${sinGuardar} sin guardar` : ""),
+      3000,
+    );
+  }
+
+  // ── Steppers móviles (§13.3) ──
+
+  function ajustarCelda(linea: ProyectoConCliente, fecha: string, delta: number) {
+    const k = clave(linea.id, fecha);
+    const escrito = interpretarHoras(valoresRef.current[k] ?? "");
+    const base =
+      typeof escrito === "number"
+        ? escrito
+        : (guardadasRef.current[k] ?? 0);
+    const nuevo = Math.min(24, Math.max(0, redondearAPaso(base + delta)));
+
+    if (nuevo === 0) {
+      ponerValor(k, "");
+      cancelarDebounce(k);
+      ponerEstado(k);
+      if (guardadasRef.current[k] !== undefined)
+        void guardarCelda(linea.id, fecha, null);
+      return;
+    }
+    ponerValor(k, formatearHoras(nuevo));
+    ponerEstado(k);
+    programarGuardado(linea.id, fecha); // toques rápidos → un solo guardado
   }
 
   // ── Líneas ──
 
-  function anadirLinea(linea: ProyectoConCliente) {
+  function anadirLineas(nuevas: ProyectoConCliente[]) {
+    if (nuevas.length === 0) return;
     setOcultas((prev) => {
       const s = new Set(prev);
-      s.delete(linea.id);
+      nuevas.forEach((l) => s.delete(l.id));
       return s;
     });
-    if (!lineas.some((l) => l.id === linea.id)) {
-      setExtras((prev) => (prev.some((l) => l.id === linea.id) ? prev : [...prev, linea]));
-    }
+    setExtras((prev) => [
+      ...prev,
+      ...nuevas.filter(
+        (l) =>
+          !prev.some((p) => p.id === l.id) && !lineas.some((p) => p.id === l.id),
+      ),
+    ]);
+    pendienteFocoRef.current = nuevas[0].id;
+    const ids = new Set(nuevas.map((l) => l.id));
+    setLineasNuevas(ids);
+    setTimeout(() => setLineasNuevas(new Set()), 1000);
   }
+
+  // Foco a la primera celda de la línea recién añadida (D8).
+  useEffect(() => {
+    const id = pendienteFocoRef.current;
+    if (!id) return;
+    const fila = lineasVisibles.findIndex((l) => l.id === id);
+    if (fila === -1) return;
+    pendienteFocoRef.current = null;
+    const col =
+      hoy && dias.includes(hoy) && indicesVisibles.includes(dias.indexOf(hoy))
+        ? dias.indexOf(hoy)
+        : indicesVisibles[0];
+    tablaRef.current
+      ?.querySelector<HTMLInputElement>(`[data-celda="${fila}-${col}"]`)
+      ?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lineasVisibles]);
+
+  // Foco inicial en escritorio, semana con "hoy" visible (§12.7, opcional).
+  useEffect(() => {
+    if (autoenfocadoRef.current || !hoy || !dias.includes(hoy)) return;
+    if (lineasVisibles.length === 0) return;
+    if (!window.matchMedia("(min-width: 640px)").matches) return;
+    const activo = document.activeElement;
+    if (activo && activo !== document.body) return;
+    autoenfocadoRef.current = true;
+    tablaRef.current
+      ?.querySelector<HTMLInputElement>(`[data-celda="0-${dias.indexOf(hoy)}"]`)
+      ?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hoy]);
 
   function quitarLinea(id: string) {
     setExtras((prev) => prev.filter((l) => l.id !== id));
@@ -286,7 +515,7 @@ export function RejillaSemana({
     });
   }
 
-  // ── Totales (optimistas: sobre lo que hay escrito y es válido) ──
+  // ── Totales (optimistas: sobre lo escrito y válido) ──
 
   function valorNumerico(proyectoId: string, fecha: string): number {
     const res = interpretarHoras(valores[clave(proyectoId, fecha)] ?? "");
@@ -297,75 +526,116 @@ export function RejillaSemana({
     dias.reduce((suma, f) => suma + valorNumerico(proyectoId, f), 0);
   const totalDia = (fecha: string) =>
     lineasVisibles.reduce((suma, l) => suma + valorNumerico(l.id, fecha), 0);
-  const totalSemana = lineasVisibles.reduce((suma, l) => suma + totalLinea(l.id), 0);
+  const totalSemana = lineasVisibles.reduce(
+    (suma, l) => suma + totalLinea(l.id),
+    0,
+  );
+
+  /** Regla única para totales a 0: guion tenue (D11). */
+  function pintarTotal(total: number, extraClase = "") {
+    return total > 0 ? (
+      <span className={extraClase}>{formatearHoras(total)}</span>
+    ) : (
+      <span className="font-normal text-texto-suave">—</span>
+    );
+  }
 
   // ── Indicador global ──
 
   const estados = Object.values(estadoCeldas);
   const guardando = estados.includes("guardando");
-  const hayErrores = estados.includes("error");
+  const numErrores = estados.filter((e) => e === "error").length;
 
-  // ── Teclado: Enter/flechas mueven el foco verticalmente ──
+  // ── Teclado ──
 
   function enfocarCelda(fila: number, col: number) {
-    const el = tablaRef.current?.querySelector<HTMLInputElement>(
-      `[data-celda="${fila}-${col}"]`,
-    );
-    el?.focus();
+    tablaRef.current
+      ?.querySelector<HTMLInputElement>(`[data-celda="${fila}-${col}"]`)
+      ?.focus();
   }
 
   function alTeclearEnCelda(
     e: React.KeyboardEvent<HTMLInputElement>,
+    linea: ProyectoConCliente,
+    fecha: string,
     fila: number,
     col: number,
   ) {
     if (e.key === "Enter" || e.key === "ArrowDown") {
       e.preventDefault();
       if (fila + 1 < lineasVisibles.length) enfocarCelda(fila + 1, col);
-      else e.currentTarget.blur(); // última fila: confirma y guarda
+      else e.currentTarget.blur();
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       if (fila > 0) enfocarCelda(fila - 1, col);
+    } else if (e.key === "Escape") {
+      // Revierte al último valor guardado (D12).
+      e.preventDefault();
+      const k = clave(linea.id, fecha);
+      cancelarDebounce(k);
+      const guardado = guardadasRef.current[k];
+      ponerValor(k, guardado !== undefined ? formatearHoras(guardado) : "");
+      ponerEstado(k);
+      e.currentTarget.blur();
     }
   }
 
-  // ── Render de una celda (compartido entre tabla y vista móvil) ──
+  // ── Render de una celda ──
 
   function celdaInput(
     linea: ProyectoConCliente,
     fecha: string,
-    extra?: { fila: number; col: number },
+    opciones?: { fila: number; col: number },
   ) {
     const k = clave(linea.id, fecha);
     const estado = estadoCeldas[k];
-    const conError = estado === "error" || estado === "invalido";
     const idxDia = dias.indexOf(fecha);
+    const esHoy = hoy === fecha;
+    const enTabla = opciones !== undefined;
+
+    const clasesEstado =
+      estado === "invalido"
+        ? "border-aviso bg-aviso-suave text-aviso focus:ring-2 focus:ring-aviso/25"
+        : estado === "error"
+          ? "border-error bg-error-suave text-error focus:ring-2 focus:ring-error/25"
+          : estado === "confirmado"
+            ? "border-exito bg-superficie text-texto"
+            : `${esHoy && enTabla ? "bg-superficie" : "bg-superficie"} border-borde text-texto hover:border-borde-fuerte focus:border-acento focus:ring-2 focus:ring-acento/20`;
+
     return (
       <input
         type="text"
         inputMode="decimal"
         autoComplete="off"
         enterKeyHint="next"
-        data-celda={extra ? `${extra.fila}-${extra.col}` : undefined}
+        data-celda={enTabla ? `${opciones.fila}-${opciones.col}` : undefined}
         aria-label={`Horas de ${linea.cliente.nombre} — ${linea.nombre}, ${NOMBRES_DIA[idxDia]} ${etiquetaDia(fecha)}`}
-        aria-invalid={conError || undefined}
+        aria-invalid={estado === "invalido" || estado === "error" || undefined}
         title={
           estado === "invalido"
-            ? "Horas en pasos de 0,5, entre 0,5 y 24"
+            ? AYUDA_PASOS
             : estado === "error"
-              ? "No se pudo guardar"
+              ? "No se guardó. Toca Reintentar."
               : undefined
         }
         value={valores[k] ?? ""}
-        onChange={(e) => setValores((prev) => ({ ...prev, [k]: e.target.value }))}
+        onChange={(e) => {
+          ponerValor(k, e.target.value);
+          if (estadoCeldas[k] === "invalido") ponerEstado(k);
+          programarGuardado(linea.id, fecha);
+        }}
         onBlur={() => alSalirDeCelda(linea.id, fecha)}
         onFocus={(e) => e.currentTarget.select()}
-        onKeyDown={extra ? (e) => alTeclearEnCelda(e, extra.fila, extra.col) : undefined}
-        className={`h-9 w-full min-w-12 rounded-md border text-center text-sm tabular-nums outline-none transition-colors ${
-          conError
-            ? "border-red-500 bg-red-50 text-red-700 focus:ring-2 focus:ring-red-200"
-            : "border-neutral-200 bg-white text-neutral-900 hover:border-neutral-300 focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10"
-        } ${estado === "guardando" ? "opacity-70" : ""}`}
+        onPaste={enTabla ? (e) => alPegar(e, linea, opciones.col) : undefined}
+        onKeyDown={
+          enTabla
+            ? (e) =>
+                alTeclearEnCelda(e, linea, fecha, opciones.fila, opciones.col)
+            : undefined
+        }
+        className={`w-full rounded-md border text-center tabular-nums outline-none transition-colors ${
+          enTabla ? "h-10 min-w-12 text-[15px] font-medium" : "h-11 text-base font-medium"
+        } ${clasesEstado} ${estado === "guardando" ? "opacity-70" : ""}`}
       />
     );
   }
@@ -373,25 +643,18 @@ export function RejillaSemana({
   function botonesLinea(linea: ProyectoConCliente) {
     const notaPuesta = Boolean((notas[linea.id] ?? "").trim());
     return (
-      <span className="flex items-center gap-1">
+      <span className="flex items-center">
         <button
           type="button"
           onClick={() => alternarNota(linea.id)}
           aria-expanded={notasAbiertas.has(linea.id)}
           aria-label={`Nota de ${linea.cliente.nombre} — ${linea.nombre}`}
           title={notaPuesta ? `Nota: ${notas[linea.id]}` : "Añadir nota"}
-          className={`rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-neutral-900 ${
-            notaPuesta ? "font-semibold text-neutral-900" : "text-neutral-400"
+          className={`flex size-10 items-center justify-center rounded-md transition-colors hover:bg-superficie-2 focus-visible:outline-2 focus-visible:outline-acento ${
+            notaPuesta ? "text-acento" : "text-texto-suave"
           }`}
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="none"
-            aria-hidden="true"
-            className="inline-block"
-          >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path
               d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v6a1.5 1.5 0 0 1-1.5 1.5H8l-3.5 3v-3h-1A1.5 1.5 0 0 1 2 9.5v-6Z"
               stroke="currentColor"
@@ -405,10 +668,17 @@ export function RejillaSemana({
             type="button"
             onClick={() => quitarLinea(linea.id)}
             aria-label={`Quitar la línea ${linea.cliente.nombre} — ${linea.nombre}`}
-            title="Quitar línea (sin horas esta semana)"
-            className="rounded-md px-1.5 py-1 text-xs text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-red-600 focus-visible:outline-2 focus-visible:outline-neutral-900"
+            title="Quitar línea"
+            className="flex size-10 items-center justify-center rounded-md text-texto-suave transition-colors hover:bg-superficie-2 hover:text-error focus-visible:outline-2 focus-visible:outline-acento"
           >
-            ✕
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path
+                d="M3 3l8 8M11 3l-8 8"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+            </svg>
           </button>
         )}
       </span>
@@ -420,11 +690,13 @@ export function RejillaSemana({
       <input
         type="text"
         value={notas[linea.id] ?? ""}
-        placeholder="Nota de la línea (p. ej. la tarea concreta)"
+        placeholder="Nota (opcional)"
         aria-label={`Nota para ${linea.cliente.nombre} — ${linea.nombre}`}
-        onChange={(e) => setNotas((prev) => ({ ...prev, [linea.id]: e.target.value }))}
+        onChange={(e) =>
+          setNotas((prev) => ({ ...prev, [linea.id]: e.target.value }))
+        }
         onBlur={() => void guardarNota(linea.id)}
-        className="h-8 w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 text-xs text-neutral-700 outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10"
+        className="h-9 w-full rounded-md border border-borde bg-superficie-2 px-2.5 text-xs text-texto outline-none focus:border-acento focus:ring-2 focus:ring-acento/20"
       />
     );
   }
@@ -433,60 +705,78 @@ export function RejillaSemana({
 
   return (
     <div>
-      {/* Indicador global de guardado */}
-      <div className="mb-2 flex min-h-6 items-center justify-end gap-2 text-xs" aria-live="polite">
-        {guardando ? (
-          <span className="text-neutral-500">Guardando…</span>
-        ) : hayErrores ? (
-          <span className="flex items-center gap-2 text-red-600">
-            No se pudo guardar alguna celda.
+      {/* Indicador global (transitorio; errores y offline persisten) */}
+      <div
+        className="mb-2 flex min-h-6 items-center justify-end gap-2 text-xs"
+        aria-live="polite"
+      >
+        {!conectado ? (
+          <span className="rounded-md bg-aviso-suave px-2 py-0.5 text-aviso">
+            Sin conexión — tus cambios se guardarán al volver
+          </span>
+        ) : guardando ? (
+          <span className="text-texto-suave">Guardando…</span>
+        ) : numErrores > 0 ? (
+          <span className="flex items-center gap-2 text-error">
+            No se guardaron {numErrores} cambio{numErrores === 1 ? "" : "s"}.
             <button
               type="button"
               onClick={reintentarErrores}
-              className="rounded-md border border-red-300 px-2 py-0.5 font-medium transition-colors hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-red-600"
+              className="rounded-md border border-error/40 px-2 py-0.5 font-medium transition-colors hover:bg-error-suave focus-visible:outline-2 focus-visible:outline-error"
             >
               Reintentar
             </button>
           </span>
-        ) : huboGuardado ? (
-          <span className="text-emerald-700">Guardado ✓</span>
+        ) : badge ? (
+          <span className="text-exito transition-opacity duration-300">
+            {badge}
+          </span>
         ) : null}
       </div>
 
       {lineasVisibles.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-neutral-300 px-6 py-10 text-center text-sm text-neutral-500">
-          No tienes líneas de trabajo esta semana. Añade la primera con «+ Añadir línea».
+        <div className="rounded-xl border border-dashed border-borde-fuerte px-6 py-10 text-center text-sm text-texto-suave">
+          Aún no tienes líneas. Añade la primera con + Añadir línea.
         </div>
       ) : (
         <>
           {/* ── Rejilla de escritorio ── */}
-          <div ref={tablaRef} className="hidden overflow-x-auto sm:block">
+          <div
+            ref={tablaRef}
+            className="hidden overflow-x-auto rounded-xl border border-borde bg-superficie px-3 pb-1 sm:block"
+          >
             <table className="w-full min-w-[640px] border-separate border-spacing-0 text-sm">
               <thead>
-                <tr className="text-xs text-neutral-500">
-                  <th scope="col" className="w-56 pb-2 pr-3 text-left font-medium">
+                <tr className="text-xs text-texto-suave">
+                  <th scope="col" className="w-56 py-2.5 pr-3 text-left font-semibold">
                     Cliente — proyecto
                   </th>
-                  {indicesVisibles.map((i) => (
-                    <th
-                      key={dias[i]}
-                      scope="col"
-                      className={`px-1 pb-2 text-center font-medium ${
-                        hoy === dias[i] ? "text-neutral-900" : ""
-                      }`}
-                    >
-                      <span className={hoy === dias[i] ? "font-semibold" : ""}>
+                  {indicesVisibles.map((i) => {
+                    const esHoy = hoy === dias[i];
+                    const finde = i >= 5;
+                    return (
+                      <th
+                        key={dias[i]}
+                        scope="col"
+                        className={`px-1 py-2.5 text-center font-semibold ${
+                          esHoy
+                            ? "border-b-2 border-acento text-acento"
+                            : finde
+                              ? "text-texto-suave/80"
+                              : ""
+                        }`}
+                      >
                         {DIAS_SEMANA[i]}
-                      </span>
-                      <span className="mt-0.5 block text-[11px] font-normal text-neutral-400">
-                        {etiquetaDia(dias[i])}
-                      </span>
-                    </th>
-                  ))}
-                  <th scope="col" className="w-16 px-1 pb-2 text-right font-medium">
+                        <span className="mt-0.5 block text-[11px] font-normal">
+                          {etiquetaDia(dias[i])}
+                        </span>
+                      </th>
+                    );
+                  })}
+                  <th scope="col" className="w-16 px-1 py-2.5 text-right font-semibold">
                     Total
                   </th>
-                  <th scope="col" className="w-16 pb-2">
+                  <th scope="col" className="w-20 py-2.5">
                     <span className="sr-only">Acciones</span>
                   </th>
                 </tr>
@@ -494,39 +784,49 @@ export function RejillaSemana({
               <tbody>
                 {lineasVisibles.map((linea, fila) => (
                   <Fragment key={linea.id}>
-                    <tr>
+                    <tr
+                      className={`transition-colors hover:bg-superficie-2/60 ${
+                        lineasNuevas.has(linea.id) ? "bg-acento-suave" : ""
+                      }`}
+                    >
                       <th
                         scope="row"
-                        className="border-t border-neutral-100 py-1.5 pr-3 text-left font-normal"
+                        className="border-t border-borde py-2 pr-3 text-left font-normal"
                       >
-                        <span className="block text-[11px] uppercase tracking-wide text-neutral-400">
+                        <span
+                          className="block text-[11px] font-medium uppercase tracking-wide text-texto-suave"
+                          title={linea.cliente.nombre}
+                        >
                           {linea.cliente.nombre}
                         </span>
-                        <span className="block truncate font-medium text-neutral-900">
+                        <span
+                          className="block truncate text-sm font-semibold text-tinta"
+                          title={linea.nombre}
+                        >
                           {linea.nombre}
                         </span>
                       </th>
                       {indicesVisibles.map((i) => (
                         <td
                           key={dias[i]}
-                          className={`border-t border-neutral-100 px-1 py-1.5 ${
-                            hoy === dias[i] ? "bg-neutral-100/70" : ""
+                          className={`border-t border-borde px-1 py-2 ${
+                            hoy === dias[i] ? "bg-acento-suave" : ""
                           }`}
                         >
                           {celdaInput(linea, dias[i], { fila, col: i })}
                         </td>
                       ))}
-                      <td className="border-t border-neutral-100 px-1 py-1.5 text-right font-medium tabular-nums text-neutral-900">
-                        {totalLinea(linea.id) > 0 ? formatearHoras(totalLinea(linea.id)) : ""}
+                      <td className="border-t border-borde px-1 py-2 text-right text-sm font-semibold tabular-nums text-tinta">
+                        {pintarTotal(totalLinea(linea.id))}
                       </td>
-                      <td className="border-t border-neutral-100 py-1.5 pl-1 text-right">
+                      <td className="border-t border-borde py-2 pl-1 text-right">
                         {botonesLinea(linea)}
                       </td>
                     </tr>
                     {notasAbiertas.has(linea.id) && (
                       <tr>
                         <td />
-                        <td colSpan={indicesVisibles.length + 2} className="pb-1.5">
+                        <td colSpan={indicesVisibles.length + 2} className="pb-2">
                           {inputNota(linea)}
                         </td>
                       </tr>
@@ -535,24 +835,32 @@ export function RejillaSemana({
                 ))}
               </tbody>
               <tfoot>
-                <tr className="text-sm">
-                  <th scope="row" className="border-t border-neutral-200 py-2 pr-3 text-left text-xs font-medium text-neutral-500">
+                <tr>
+                  <th
+                    scope="row"
+                    className="border-t border-borde-fuerte py-2.5 pr-3 text-left text-xs font-medium text-texto-suave"
+                  >
                     Total por día
                   </th>
                   {indicesVisibles.map((i) => (
                     <td
                       key={dias[i]}
-                      className={`border-t border-neutral-200 px-1 py-2 text-center font-medium tabular-nums text-neutral-700 ${
-                        hoy === dias[i] ? "bg-neutral-100/70" : ""
+                      className={`border-t border-borde-fuerte px-1 py-2.5 text-center text-sm font-semibold tabular-nums text-texto ${
+                        hoy === dias[i] ? "bg-acento-suave text-acento" : ""
                       }`}
                     >
-                      {totalDia(dias[i]) > 0 ? formatearHoras(totalDia(dias[i])) : ""}
+                      {pintarTotal(totalDia(dias[i]))}
                     </td>
                   ))}
-                  <td className="border-t border-neutral-200 px-1 py-2 text-right font-semibold tabular-nums text-neutral-900">
-                    {formatearHoras(totalSemana)}
+                  <td className="border-t border-borde-fuerte px-1 py-2.5 text-right">
+                    <span className="block text-[10px] font-medium uppercase tracking-wide text-texto-suave">
+                      Semana
+                    </span>
+                    <span className="text-base font-bold tabular-nums text-tinta">
+                      {totalSemana > 0 ? formatearHoras(totalSemana) : "—"}
+                    </span>
                   </td>
-                  <td className="border-t border-neutral-200" />
+                  <td className="border-t border-borde-fuerte" />
                 </tr>
               </tfoot>
             </table>
@@ -567,6 +875,8 @@ export function RejillaSemana({
             >
               {dias.map((f, i) => {
                 const activo = diaMovil === f;
+                const esHoy = hoy === f;
+                const conHoras = totalDia(f) > 0;
                 return (
                   <button
                     key={f}
@@ -574,44 +884,67 @@ export function RejillaSemana({
                     role="tab"
                     aria-selected={activo}
                     onClick={() => setDiaMovilElegido(f)}
-                    className={`flex flex-col items-center rounded-lg py-1.5 text-xs transition-colors focus-visible:outline-2 focus-visible:outline-neutral-900 ${
+                    className={`flex h-11 flex-col items-center justify-center rounded-lg text-xs transition-colors focus-visible:outline-2 focus-visible:outline-acento ${
                       activo
-                        ? "bg-neutral-900 text-white"
-                        : hoy === f
-                          ? "bg-neutral-100 font-semibold text-neutral-900"
-                          : "bg-neutral-50 text-neutral-600"
+                        ? "bg-acento font-semibold text-superficie"
+                        : esHoy
+                          ? "border-b-2 border-acento bg-superficie-2 font-semibold text-acento"
+                          : "bg-superficie-2 text-texto-suave"
                     }`}
                   >
                     <span>{DIAS_SEMANA[i]}</span>
-                    <span className={`text-[10px] ${activo ? "text-neutral-300" : "text-neutral-400"}`}>
-                      {etiquetaDia(f).split(" ")[0]}
-                    </span>
+                    <span
+                      aria-hidden="true"
+                      className={`mt-0.5 size-1 rounded-full ${
+                        conHoras
+                          ? activo
+                            ? "bg-superficie"
+                            : "bg-acento"
+                          : "bg-transparent"
+                      }`}
+                    />
                   </button>
                 );
               })}
             </div>
 
-            <p className="mb-2 text-xs text-neutral-500">
+            <p className="mb-2 text-sm text-texto-suave">
               {NOMBRES_DIA[dias.indexOf(diaMovil)].charAt(0).toUpperCase() +
                 NOMBRES_DIA[dias.indexOf(diaMovil)].slice(1)}{" "}
               {etiquetaDia(diaMovil)}
               {hoy === diaMovil ? " · hoy" : ""}
             </p>
 
-            <ul className="divide-y divide-neutral-100">
+            <ul className="divide-y divide-borde">
               {lineasVisibles.map((linea) => (
                 <li key={linea.id} className="py-2.5">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <div className="min-w-0 flex-1">
-                      <span className="block text-[11px] uppercase tracking-wide text-neutral-400">
+                      <span className="block text-[11px] font-medium uppercase tracking-wide text-texto-suave">
                         {linea.cliente.nombre}
                       </span>
-                      <span className="block truncate text-sm font-medium text-neutral-900">
+                      <span className="block truncate text-sm font-semibold text-tinta">
                         {linea.nombre}
                       </span>
                     </div>
                     {botonesLinea(linea)}
-                    <div className="w-16 shrink-0">{celdaInput(linea, diaMovil)}</div>
+                    <button
+                      type="button"
+                      onClick={() => ajustarCelda(linea, diaMovil, -PASO_HORAS)}
+                      aria-label={`Quitar 0,25 h de ${linea.nombre}`}
+                      className="flex size-11 shrink-0 items-center justify-center rounded-md border border-borde text-lg text-texto transition-colors hover:bg-superficie-2 focus-visible:outline-2 focus-visible:outline-acento"
+                    >
+                      −
+                    </button>
+                    <div className="w-14 shrink-0">{celdaInput(linea, diaMovil)}</div>
+                    <button
+                      type="button"
+                      onClick={() => ajustarCelda(linea, diaMovil, PASO_HORAS)}
+                      aria-label={`Añadir 0,25 h a ${linea.nombre}`}
+                      className="flex size-11 shrink-0 items-center justify-center rounded-md border border-borde text-lg text-texto transition-colors hover:bg-superficie-2 focus-visible:outline-2 focus-visible:outline-acento"
+                    >
+                      +
+                    </button>
                   </div>
                   {notasAbiertas.has(linea.id) && (
                     <div className="mt-2">{inputNota(linea)}</div>
@@ -620,16 +953,16 @@ export function RejillaSemana({
               ))}
             </ul>
 
-            <dl className="mt-3 flex justify-between gap-4 border-t border-neutral-200 pt-3 text-sm">
-              <div className="flex gap-2">
-                <dt className="text-neutral-500">Total del día</dt>
-                <dd className="font-semibold tabular-nums text-neutral-900">
+            <dl className="mt-3 flex items-baseline justify-between gap-4 border-t border-borde-fuerte pt-3">
+              <div className="flex items-baseline gap-2">
+                <dt className="text-sm text-texto-suave">Total del día</dt>
+                <dd className="text-base font-bold tabular-nums text-tinta">
                   {formatearHoras(totalDia(diaMovil))}
                 </dd>
               </div>
-              <div className="flex gap-2">
-                <dt className="text-neutral-500">Semana</dt>
-                <dd className="font-semibold tabular-nums text-neutral-900">
+              <div className="flex items-baseline gap-2">
+                <dt className="text-sm text-texto-suave">Semana</dt>
+                <dd className="text-sm font-semibold tabular-nums text-texto">
                   {formatearHoras(totalSemana)}
                 </dd>
               </div>
@@ -639,27 +972,48 @@ export function RejillaSemana({
       )}
 
       {/* ── Acciones bajo la rejilla ── */}
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <AnadirLinea clientes={clientes} idsExcluidos={idsVisibles} alAnadir={anadirLinea} />
-        {!verFinde && (
+      <div className="mt-4 flex flex-wrap items-start gap-3">
+        <AnadirLinea
+          clientes={clientes}
+          idsExcluidos={idsVisibles}
+          alAnadir={anadirLineas}
+        />
+        {(!verFinde || !hayHorasFinde) && (
           <button
             type="button"
-            onClick={() => setVerFinde(true)}
-            className="hidden rounded-lg px-3 py-2 text-sm text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-neutral-900 sm:inline-block"
+            onClick={() => setVerFinde((v) => !v)}
+            title={
+              verFinde
+                ? undefined
+                : "Muestra sábado y domingo en la rejilla"
+            }
+            className="hidden items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-texto-suave transition-colors hover:bg-superficie-2 hover:text-tinta focus-visible:outline-2 focus-visible:outline-acento sm:inline-flex"
           >
-            + fin de semana
-          </button>
-        )}
-        {verFinde && !hayHorasFinde && (
-          <button
-            type="button"
-            onClick={() => setVerFinde(false)}
-            className="hidden rounded-lg px-3 py-2 text-sm text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-neutral-900 sm:inline-block"
-          >
-            − ocultar fin de semana
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+              fill="none"
+              aria-hidden="true"
+              className={`transition-transform ${verFinde ? "rotate-90" : ""}`}
+            >
+              <path
+                d="M4 2l4 4-4 4"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Fin de semana
           </button>
         )}
       </div>
+
+      <p className="mt-3 hidden text-xs text-texto-suave sm:block">
+        Consejo: copia una fila de tu hoja de cálculo y pégala sobre una celda
+        para rellenar varios días.
+      </p>
     </div>
   );
 }

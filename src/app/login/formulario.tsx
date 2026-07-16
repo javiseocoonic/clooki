@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { iniciarSesion, type EstadoLogin } from "./acciones";
+import { CampoContrasena } from "@/componentes/campo-contrasena";
 
 const ESTADO_INICIAL: EstadoLogin = { mensaje: null };
 
@@ -11,12 +12,9 @@ export function FormularioLogin() {
     ESTADO_INICIAL,
   );
 
-  const estiloInput =
-    "rounded-lg border border-neutral-300 px-4 py-2.5 text-base outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10";
-
   return (
     <form action={accion} className="flex flex-col gap-3">
-      <label htmlFor="email" className="text-sm font-medium text-neutral-700">
+      <label htmlFor="email" className="text-sm font-medium text-texto">
         Tu correo de Coonic
       </label>
       <input
@@ -29,26 +27,18 @@ export function FormularioLogin() {
         placeholder="nombre@coonic.com"
         pattern=".+@coonic\.com"
         title="Correo @coonic.com"
-        className={estiloInput}
+        className="rounded-lg border border-borde-fuerte bg-superficie px-4 py-2.5 text-base text-tinta outline-none focus:border-acento focus:ring-2 focus:ring-acento/20"
       />
 
-      <label
-        htmlFor="contrasena"
-        className="mt-1 text-sm font-medium text-neutral-700"
-      >
-        Contraseña
-      </label>
-      <input
+      <CampoContrasena
         id="contrasena"
         name="contrasena"
-        type="password"
-        required
+        label="Contraseña"
         autoComplete="current-password"
-        className={estiloInput}
       />
 
       {estado.mensaje && (
-        <p className="text-sm text-red-600" role="alert">
+        <p className="text-sm text-error" role="alert">
           {estado.mensaje}
         </p>
       )}
@@ -56,7 +46,7 @@ export function FormularioLogin() {
       <button
         type="submit"
         disabled={pendiente}
-        className="mt-1 rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-700 disabled:opacity-50"
+        className="mt-1 rounded-lg bg-tinta px-4 py-2.5 text-sm font-semibold text-superficie transition-colors hover:bg-texto focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-50"
       >
         {pendiente ? "Entrando…" : "Entrar"}
       </button>

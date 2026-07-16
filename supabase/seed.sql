@@ -49,3 +49,19 @@ cross join (values
   ('Consultoría'),
   ('Contenidos')
 ) as p (nombre);
+
+-- ---------- Cliente interno (añadido en migración 002; aquí para
+-- instalaciones desde cero) ----------
+insert into public.clientes (nombre)
+select 'Coonic (interno)'
+where not exists (select 1 from public.clientes where nombre = 'Coonic (interno)');
+
+insert into public.proyectos (cliente_id, nombre)
+select c.id, p.nombre
+from public.clientes c
+cross join (values ('Gestión interna'), ('Formación'), ('Comercial')) as p (nombre)
+where c.nombre = 'Coonic (interno)'
+  and not exists (
+    select 1 from public.proyectos pr
+    where pr.cliente_id = c.id and pr.nombre = p.nombre
+  );

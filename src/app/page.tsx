@@ -7,6 +7,7 @@ import {
   sumarSemanas,
 } from "@/lib/semana";
 import { RejillaSemana } from "@/componentes/rejilla-semana";
+import { AvisoSemanaIncompleta } from "@/componentes/aviso-semana-incompleta";
 import { cerrarSesion } from "./login/acciones";
 
 export default async function PaginaMiSemana({
@@ -25,15 +26,15 @@ export default async function PaginaMiSemana({
     return (
       <main className="flex flex-1 items-center justify-center p-6">
         <div className="max-w-sm text-center">
-          <h1 className="text-xl font-bold">Clooki</h1>
-          <p className="mt-3 text-sm text-neutral-600">
-            Tu usuario no está dado de alta en Clooki. Pide a un admin que te
-            añada en Gestión y vuelve a entrar.
+          <h1 className="text-xl font-bold text-tinta">Clooki</h1>
+          <p className="mt-3 text-sm text-texto">
+            Todavía no tienes acceso a Clooki. Pide a un admin que te dé de
+            alta y vuelve a entrar.
           </p>
           <form action={cerrarSesion} className="mt-6">
             <button
               type="submit"
-              className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:border-neutral-900 hover:text-neutral-900"
+              className="rounded-lg border border-borde-fuerte px-4 py-2 text-sm font-medium text-texto transition-colors hover:border-acento hover:text-acento focus-visible:outline-2 focus-visible:outline-acento"
             >
               Cerrar sesión
             </button>
@@ -45,12 +46,15 @@ export default async function PaginaMiSemana({
 
   const { persona } = datos;
   const estiloNav =
-    "rounded-lg px-2.5 py-1.5 text-sm text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-neutral-900";
+    "rounded-lg px-2.5 py-1.5 text-sm text-texto-suave transition-colors hover:bg-superficie-2 hover:text-tinta focus-visible:outline-2 focus-visible:outline-acento";
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-5 sm:px-6">
-      <header className="flex items-center gap-3">
-        <span className="text-lg font-bold tracking-tight">Clooki</span>
+    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-4 sm:px-6">
+      {/* Barra superior: identidad + navegación de app */}
+      <header className="flex items-center gap-2 border-b border-borde pb-3">
+        <span className="text-lg font-bold tracking-tight text-tinta">
+          Clooki
+        </span>
         {persona.rol === "admin" && (
           <nav aria-label="Admin" className="flex items-center gap-1">
             <Link href="/resumen" className={estiloNav}>
@@ -61,7 +65,7 @@ export default async function PaginaMiSemana({
             </Link>
           </nav>
         )}
-        <span className="ml-auto hidden text-sm text-neutral-500 sm:inline">
+        <span className="ml-auto hidden text-sm text-texto-suave sm:inline">
           {persona.nombre}
         </span>
         <Link
@@ -77,34 +81,47 @@ export default async function PaginaMiSemana({
         </form>
       </header>
 
-      <main className="mt-6 flex-1">
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <h1 className="mr-2 text-xl font-bold tracking-tight">Mi semana</h1>
-          <nav aria-label="Semana" className="flex items-center gap-1">
+      <main className="mt-5 flex-1">
+        {/* Título de la vista + navegación de semana agrupada */}
+        <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <h1 className="text-xl font-bold tracking-tight text-tinta">
+            Mi semana
+          </h1>
+          <nav aria-label="Semana" className="flex items-center gap-0.5">
             <Link
               href={`/?semana=${sumarSemanas(lunes, -1)}`}
               aria-label="Semana anterior"
-              className={estiloNav}
+              className="flex size-10 items-center justify-center rounded-lg text-texto-suave transition-colors hover:bg-superficie-2 hover:text-tinta focus-visible:outline-2 focus-visible:outline-acento"
             >
               ←
             </Link>
-            <span className="min-w-36 text-center text-sm font-medium text-neutral-700 tabular-nums">
+            <span className="min-w-36 text-center text-sm font-medium text-texto tabular-nums">
               {etiquetaSemana(lunes)}
             </span>
             <Link
               href={`/?semana=${sumarSemanas(lunes, 1)}`}
               aria-label="Semana siguiente"
-              className={estiloNav}
+              className="flex size-10 items-center justify-center rounded-lg text-texto-suave transition-colors hover:bg-superficie-2 hover:text-tinta focus-visible:outline-2 focus-visible:outline-acento"
             >
               →
             </Link>
             {lunes !== lunesHoy && (
-              <Link href="/" className={estiloNav}>
+              <Link
+                href="/"
+                className="ml-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-acento transition-colors hover:bg-acento-suave focus-visible:outline-2 focus-visible:outline-acento"
+              >
                 Hoy
               </Link>
             )}
           </nav>
         </div>
+
+        {lunes === lunesHoy && (
+          <AvisoSemanaIncompleta
+            dias={datos.diasSinHorasSemanaAnterior}
+            lunesAnterior={sumarSemanas(lunes, -1)}
+          />
+        )}
 
         <RejillaSemana
           key={lunes}

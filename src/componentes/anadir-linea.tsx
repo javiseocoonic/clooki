@@ -8,13 +8,13 @@ interface Props {
   clientes: (Cliente & { proyectos: Proyecto[] })[];
   /** Proyectos ya presentes en la rejilla (no se ofrecen de nuevo). */
   idsExcluidos: string[];
-  alAnadir: (linea: ProyectoConCliente) => void;
+  alAnadir: (lineas: ProyectoConCliente[]) => void;
 }
 
 export function AnadirLinea({ clientes, idsExcluidos, alAnadir }: Props) {
   const [abierto, setAbierto] = useState(false);
   const [clienteId, setClienteId] = useState("");
-  const [proyectoId, setProyectoId] = useState("");
+  const [marcados, setMarcados] = useState<Set<string>>(new Set());
 
   const excluidos = new Set(idsExcluidos);
   const clientesConOpciones = clientes
@@ -25,25 +25,34 @@ export function AnadirLinea({ clientes, idsExcluidos, alAnadir }: Props) {
     .filter((c) => c.proyectos.length > 0);
 
   const clienteElegido = clientesConOpciones.find((c) => c.id === clienteId);
+  const n = marcados.size;
 
   function cerrar() {
     setAbierto(false);
     setClienteId("");
-    setProyectoId("");
+    setMarcados(new Set());
+  }
+
+  function alternar(proyectoId: string) {
+    setMarcados((prev) => {
+      const s = new Set(prev);
+      if (s.has(proyectoId)) s.delete(proyectoId);
+      else s.add(proyectoId);
+      return s;
+    });
   }
 
   function anadir() {
-    if (!clienteElegido) return;
-    const proyecto = clienteElegido.proyectos.find((p) => p.id === proyectoId);
-    if (!proyecto) return;
-    alAnadir({
-      ...proyecto,
-      cliente: {
-        id: clienteElegido.id,
-        nombre: clienteElegido.nombre,
-        activo: clienteElegido.activo,
-      },
-    });
+    if (!clienteElegido || n === 0) return;
+    const cliente: Cliente = {
+      id: clienteElegido.id,
+      nombre: clienteElegido.nombre,
+      activo: clienteElegido.activo,
+    };
+    const nuevas = clienteElegido.proyectos
+      .filter((p) => marcados.has(p.id))
+      .map((p) => ({ ...p, cliente }));
+    alAnadir(nuevas);
     cerrar();
   }
 
@@ -53,19 +62,29 @@ export function AnadirLinea({ clientes, idsExcluidos, alAnadir }: Props) {
         type="button"
         onClick={() => setAbierto(true)}
         disabled={clientesConOpciones.length === 0}
-        className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 transition-colors hover:border-neutral-900 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-neutral-900 disabled:opacity-40"
+        title={
+          clientesConOpciones.length === 0
+            ? "Ya tienes todas tus líneas"
+            : undefined
+        }
+        className="rounded-lg border border-borde-fuerte px-3 py-2 text-sm font-medium text-texto transition-colors hover:border-acento hover:text-acento focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
       >
         + Añadir línea
       </button>
     );
   }
 
-  const estiloSelect =
-    "h-9 rounded-lg border border-neutral-300 bg-white px-2 text-sm text-neutral-900 outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10";
-
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <label className="sr-only" htmlFor="nuevo-cliente">
+    <div
+      className="w-full max-w-md rounded-xl border border-borde bg-superficie p-3"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") cerrar();
+      }}
+    >
+      <label
+        htmlFor="nuevo-cliente"
+        className="mb-1.5 block text-xs font-medium text-texto-suave"
+      >
         Cliente
       </label>
       <select
@@ -74,11 +93,11 @@ export function AnadirLinea({ clientes, idsExcluidos, alAnadir }: Props) {
         value={clienteId}
         onChange={(e) => {
           setClienteId(e.target.value);
-          setProyectoId("");
+          setMarcados(new Set());
         }}
-        className={estiloSelect}
+        className="h-10 w-full rounded-lg border border-borde-fuerte bg-superficie px-2 text-sm text-tinta outline-none focus:border-acento focus:ring-2 focus:ring-acento/20"
       >
-        <option value="">Cliente…</option>
+        <option value="">Elige un cliente…</option>
         {clientesConOpciones.map((c) => (
           <option key={c.id} value={c.id}>
             {c.nombre}
@@ -86,39 +105,51 @@ export function AnadirLinea({ clientes, idsExcluidos, alAnadir }: Props) {
         ))}
       </select>
 
-      <label className="sr-only" htmlFor="nuevo-proyecto">
-        Proyecto o tarea
-      </label>
-      <select
-        id="nuevo-proyecto"
-        value={proyectoId}
-        onChange={(e) => setProyectoId(e.target.value)}
-        disabled={!clienteElegido}
-        className={`${estiloSelect} disabled:opacity-40`}
-      >
-        <option value="">Proyecto…</option>
-        {clienteElegido?.proyectos.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.nombre}
-          </option>
-        ))}
-      </select>
+      {clienteElegido && (
+        <fieldset className="mt-3">
+          <legend className="mb-1.5 text-xs font-medium text-texto-suave">
+            Proyectos de {clienteElegido.nombre}
+          </legend>
+          <div className="max-h-56 overflow-y-auto rounded-lg border border-borde">
+            {clienteElegido.proyectos.map((p) => (
+              <label
+                key={p.id}
+                className="flex min-h-11 cursor-pointer items-center gap-2.5 border-b border-borde px-3 py-2 text-sm text-tinta transition-colors last:border-b-0 hover:bg-superficie-2"
+              >
+                <input
+                  type="checkbox"
+                  checked={marcados.has(p.id)}
+                  onChange={() => alternar(p.id)}
+                  className="size-4 accent-[var(--acento)]"
+                />
+                {p.nombre}
+              </label>
+            ))}
+          </div>
+          <p aria-live="polite" className="sr-only">
+            {n} proyectos seleccionados
+          </p>
+        </fieldset>
+      )}
 
-      <button
-        type="button"
-        onClick={anadir}
-        disabled={!proyectoId}
-        className="rounded-lg bg-neutral-900 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-neutral-700 focus-visible:outline-2 focus-visible:outline-neutral-900 disabled:opacity-40"
-      >
-        Añadir
-      </button>
-      <button
-        type="button"
-        onClick={cerrar}
-        className="rounded-lg px-2 py-2 text-sm text-neutral-500 transition-colors hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-neutral-900"
-      >
-        Cancelar
-      </button>
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={anadir}
+          disabled={n === 0}
+          title={n === 0 ? "Marca al menos un proyecto" : undefined}
+          className="rounded-lg bg-tinta px-3 py-2 text-sm font-semibold text-superficie transition-colors hover:bg-texto focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
+        >
+          {n <= 1 ? "Añadir 1 línea" : `Añadir ${n} líneas`}
+        </button>
+        <button
+          type="button"
+          onClick={cerrar}
+          className="rounded-lg px-2.5 py-2 text-sm text-texto-suave transition-colors hover:bg-superficie-2 hover:text-tinta focus-visible:outline-2 focus-visible:outline-acento"
+        >
+          Cancelar
+        </button>
+      </div>
     </div>
   );
 }

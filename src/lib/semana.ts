@@ -99,25 +99,46 @@ export function etiquetaSemana(lunesIso: string): string {
   return `${lunes.getDate()} ${MESES_CORTOS[lunes.getMonth()]} – ${finalDomingo}`;
 }
 
-/** Formatea horas para mostrar: 7.5 → "7,5"; 8 → "8". */
+/** Paso mínimo de horas (cuartos de hora). */
+export const PASO_HORAS = 0.25;
+
+/** Redondea al múltiplo de 0,25 más cercano (empates hacia arriba). */
+export function redondearAPaso(horas: number): number {
+  return Math.round(horas * 4) / 4;
+}
+
+/** Formatea horas para mostrar: 7.5 → "7,5"; 1.25 → "1,25"; 8 → "8". */
 export function formatearHoras(horas: number): string {
-  return (Math.round(horas * 2) / 2).toString().replace(".", ",");
+  return redondearAPaso(horas).toString().replace(".", ",");
 }
 
 /**
- * Interpreta la entrada de una celda ("7,5", "7.5", " 8 ", "") y la
- * normaliza a pasos de 0,5 dentro de (0, 24]. Devuelve:
+ * Interpreta la entrada de una celda y la normaliza a pasos de 0,25
+ * dentro de (0, 24]. Acepta decimales ("7,5", "1.25", " 8 ") y formatos
+ * de reloj ("1:30", "1h30", "1h", "45m"). Devuelve:
  * - number  → valor válido a guardar
  * - null    → celda vacía (borrar registro)
  * - "error" → entrada inválida
  */
 export function interpretarHoras(entrada: string): number | null | "error" {
-  const limpia = entrada.trim().replace(",", ".");
+  const limpia = entrada.trim().toLowerCase();
   if (limpia === "") return null;
-  const n = Number(limpia);
-  if (!Number.isFinite(n) || n < 0) return "error";
+
+  let n: number;
+  const reloj = limpia.match(/^(\d{1,2})[:h](?:([0-5]?\d))?$/); // 1:30, 1h30, 1h
+  const soloMinutos = limpia.match(/^(\d{1,4})\s*m(?:in)?$/); // 45m, 90min
+  if (reloj) {
+    n = Number(reloj[1]) + (reloj[2] !== undefined ? Number(reloj[2]) : 0) / 60;
+  } else if (soloMinutos) {
+    n = Number(soloMinutos[1]) / 60;
+  } else {
+    n = Number(limpia.replace(",", "."));
+    if (!Number.isFinite(n)) return "error";
+  }
+
+  if (n < 0) return "error";
   if (n === 0) return null;
-  const redondeada = Math.round(n * 2) / 2;
+  const redondeada = redondearAPaso(n);
   if (redondeada === 0 || redondeada > 24) return "error";
   return redondeada;
 }

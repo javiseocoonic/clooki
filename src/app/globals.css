@@ -1,26 +1,111 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ── Tokens de Clooki (ux-ui-directrices.md §2.1) ─────────────────
+   Neutros cálidos + un único acento indigo (foco, hoy, selección).
+   Estados: éxito (verde), error de sistema (rojo), aviso corregible
+   por el usuario (ámbar). Los componentes consumen SOLO estos tokens. */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root {
+  /* Neutros base */
+  --fondo: #fbfbfa;
+  --superficie: #ffffff;
+  --superficie-2: #f4f4f5;
+  --borde: #e7e7e9;
+  --borde-fuerte: #d4d4d8;
+
+  /* Texto */
+  --tinta: #1b1b1f;
+  --texto: #3f3f46;
+  --texto-suave: #6b6b74;
+
+  /* Acento (indigo) */
+  --acento: #3a54c4;
+  --acento-suave: #eef1fd;
+
+  /* Estados */
+  --exito: #15803d;
+  --exito-suave: #ecfdf5;
+  --error: #b91c1c;
+  --error-suave: #fef2f2;
+  --aviso: #b45309;
+  --aviso-suave: #fffbeb;
+
+  /* Movimiento */
+  --dur-rapido: 120ms;
+  --dur-medio: 200ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --fondo: #0e0e10;
+    --superficie: #161619;
+    --superficie-2: #1f1f23;
+    --borde: #2a2a2f;
+    --borde-fuerte: #3a3a41;
+    --tinta: #fafafa;
+    --texto: #e4e4e7;
+    --texto-suave: #a1a1aa;
+    --acento: #93a5ff;
+    --acento-suave: rgba(147, 165, 255, 0.14);
+    --exito: #4ade80;
+    --exito-suave: rgba(74, 222, 128, 0.12);
+    --error: #f87171;
+    --error-suave: rgba(248, 113, 113, 0.12);
+    --aviso: #fbbf24;
+    --aviso-suave: rgba(251, 191, 36, 0.12);
   }
 }
 
+@theme inline {
+  --color-fondo: var(--fondo);
+  --color-superficie: var(--superficie);
+  --color-superficie-2: var(--superficie-2);
+  --color-borde: var(--borde);
+  --color-borde-fuerte: var(--borde-fuerte);
+  --color-tinta: var(--tinta);
+  --color-texto: var(--texto);
+  --color-texto-suave: var(--texto-suave);
+  --color-acento: var(--acento);
+  --color-acento-suave: var(--acento-suave);
+  --color-exito: var(--exito);
+  --color-exito-suave: var(--exito-suave);
+  --color-error: var(--error);
+  --color-error-suave: var(--error-suave);
+  --color-aviso: var(--aviso);
+  --color-aviso-suave: var(--aviso-suave);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--fondo);
+  color: var(--texto);
+  /* Sin font-family aquí: manda Geist vía --font-sans (bug D2 del brief). */
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Punto pulsante de "cronómetro en marcha" */
+@keyframes pulso {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.punto-pulso {
+  animation: pulso 1.6s var(--ease) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

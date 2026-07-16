@@ -20,6 +20,12 @@ export interface DatosMiSemana {
   lineas: ProyectoConCliente[];
   /** Registros de la semana visible (celdas con valor). */
   horas: RegistroHoras[];
+  /**
+   * Días laborables (L–V) de la semana ANTERIOR a la visible sin ningún
+   * registro. Alimenta el aviso de semana incompleta (brief §14.1); la
+   * página solo lo muestra cuando la semana visible es la actual.
+   */
+  diasSinHorasSemanaAnterior: number;
 }
 
 /**
@@ -61,7 +67,7 @@ export async function cargarMiSemana(
         .lte("fecha", dias[6]),
       supabase
         .from("horas")
-        .select("proyecto_id")
+        .select("proyecto_id, fecha")
         .eq("persona_id", persona.id)
         .gte("fecha", desdeRecordado)
         .lt("fecha", dias[0]),
@@ -92,6 +98,16 @@ export async function cargarMiSemana(
         a.nombre.localeCompare(b.nombre, "es"),
     );
 
+  // Días L–V de la semana anterior sin ningún registro (aviso §14.1).
+  const diasSemanaAnterior = diasDeSemana(sumarSemanas(lunesIso, -1)).slice(
+    0,
+    5,
+  );
+  const fechasConHoras = new Set(recientes.map((r) => r.fecha));
+  const diasSinHorasSemanaAnterior = diasSemanaAnterior.filter(
+    (d) => !fechasConHoras.has(d),
+  ).length;
+
   return {
     persona,
     clientes: clientes.map((c) => ({
@@ -100,5 +116,6 @@ export async function cargarMiSemana(
     })),
     lineas,
     horas,
+    diasSinHorasSemanaAnterior,
   };
 }

@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { cambiarContrasena, type EstadoCambio } from "./acciones";
+import { CampoContrasena } from "@/componentes/campo-contrasena";
 
 const ESTADO_INICIAL: EstadoCambio = { hecho: false, mensaje: null };
 
@@ -11,44 +12,26 @@ export function FormularioCambio() {
     ESTADO_INICIAL,
   );
 
-  const estiloInput =
-    "rounded-lg border border-neutral-300 px-4 py-2.5 text-base outline-none focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10";
-
   return (
     <form action={accion} className="flex flex-col gap-3">
-      <label htmlFor="nueva" className="text-sm font-medium text-neutral-700">
-        Nueva contraseña
-      </label>
-      <input
+      <CampoContrasena
         id="nueva"
         name="nueva"
-        type="password"
-        required
-        minLength={8}
-        autoFocus
+        label="Nueva contraseña"
         autoComplete="new-password"
-        className={estiloInput}
+        minLength={8}
       />
-
-      <label
-        htmlFor="repetida"
-        className="mt-1 text-sm font-medium text-neutral-700"
-      >
-        Repítela
-      </label>
-      <input
+      <CampoContrasena
         id="repetida"
         name="repetida"
-        type="password"
-        required
-        minLength={8}
+        label="Repítela"
         autoComplete="new-password"
-        className={estiloInput}
+        minLength={8}
       />
 
       {estado.mensaje && (
         <p
-          className={`text-sm ${estado.hecho ? "text-emerald-700" : "text-red-600"}`}
+          className={`text-sm ${estado.hecho ? "text-exito" : "text-error"}`}
           role={estado.hecho ? "status" : "alert"}
         >
           {estado.mensaje}
@@ -58,7 +41,7 @@ export function FormularioCambio() {
       <button
         type="submit"
         disabled={pendiente}
-        className="mt-1 rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-700 disabled:opacity-50"
+        className="mt-1 rounded-lg bg-tinta px-4 py-2.5 text-sm font-semibold text-superficie transition-colors hover:bg-texto focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-50"
       >
         {pendiente ? "Cambiando…" : "Cambiar contraseña"}
       </button>
