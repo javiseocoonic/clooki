@@ -153,7 +153,7 @@ export function AnadirLinea({
           onClick={anadir}
           disabled={n === 0}
           title={n === 0 ? "Marca al menos un proyecto" : undefined}
-          className="rounded-lg bg-tinta px-3 py-2 text-sm font-semibold text-superficie transition-colors hover:bg-texto focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
+          className="rounded-lg bg-marca-accion px-3 py-2 text-sm font-semibold text-sobre-marca transition-colors hover:bg-marca-accion-fuerte focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
         >
           {n <= 1 ? "Añadir 1 línea" : `Añadir ${n} líneas`}
         </button>

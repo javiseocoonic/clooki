@@ -19,7 +19,7 @@ export const metadata: Metadata = { title: "Gestión · Clooki" };
 const ESTILO_INPUT =
   "h-10 rounded-lg border border-borde-fuerte bg-superficie px-3 text-sm text-tinta outline-none focus:border-acento focus:ring-2 focus:ring-acento/20";
 const ESTILO_BOTON_PRIMARIO =
-  "h-10 rounded-lg bg-tinta px-3 text-sm font-semibold text-superficie transition-colors hover:bg-texto focus-visible:outline-2 focus-visible:outline-acento";
+  "h-10 rounded-lg bg-marca-accion px-3 text-sm font-semibold text-sobre-marca transition-colors hover:bg-marca-accion-fuerte focus-visible:outline-2 focus-visible:outline-acento";
 const ESTILO_BOTON_SUAVE =
   "rounded-md px-2 py-1 text-xs font-medium text-texto-suave transition-colors hover:bg-superficie-2 hover:text-tinta focus-visible:outline-2 focus-visible:outline-acento";
 
@@ -78,7 +78,7 @@ export default async function PaginaGestion({
         </Cabecera>
 
         <main className="mt-5 flex-1">
-          <h1 className="mb-4 text-xl font-bold tracking-tight text-tinta">
+          <h1 className="font-marca mb-4 text-xl font-semibold tracking-tight text-tinta">
             Gestión
           </h1>
 

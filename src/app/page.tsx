@@ -9,6 +9,7 @@ import {
 import { RejillaSemana } from "@/componentes/rejilla-semana";
 import { AvisoSemanaIncompleta } from "@/componentes/aviso-semana-incompleta";
 import { Cabecera } from "@/componentes/cabecera";
+import { Logotipo } from "@/componentes/logotipo";
 import {
   BandejaCronometros,
   ProveedorCronometros,
@@ -32,7 +33,9 @@ export default async function PaginaMiSemana({
     return (
       <main className="flex flex-1 items-center justify-center p-6">
         <div className="max-w-sm text-center">
-          <h1 className="text-xl font-bold text-tinta">Clooki</h1>
+          <h1 className="text-tinta">
+            <Logotipo className="text-2xl" />
+          </h1>
           <p className="mt-3 text-sm text-texto">
             Todavía no tienes acceso a Clooki. Pide a un admin que te dé de
             alta y vuelve a entrar.
@@ -67,7 +70,7 @@ export default async function PaginaMiSemana({
         <SesionesAntiguas />
         {/* Título de la vista + navegación de semana agrupada */}
         <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <h1 className="text-xl font-bold tracking-tight text-tinta">
+          <h1 className="font-marca text-xl font-semibold tracking-tight text-tinta">
             Mi semana
           </h1>
           <nav aria-label="Semana" className="flex items-center gap-0.5">

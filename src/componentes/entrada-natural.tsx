@@ -155,7 +155,7 @@ export function EntradaNatural({ alAplicar }: Props) {
                 type="button"
                 onClick={() => void confirmar()}
                 disabled={marcadas.size === 0 || aplicando}
-                className="rounded-lg bg-tinta px-3 py-2 text-sm font-semibold text-superficie transition-colors hover:bg-texto focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
+                className="rounded-lg bg-marca-accion px-3 py-2 text-sm font-semibold text-sobre-marca transition-colors hover:bg-marca-accion-fuerte focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
               >
                 {aplicando
                   ? "Apuntando…"

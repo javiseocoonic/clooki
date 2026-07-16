@@ -23,7 +23,7 @@ export default async function PaginaConexionIa() {
   return (
     <main className="flex flex-1 justify-center p-6">
       <div className="w-full max-w-lg">
-        <h1 className="text-2xl font-bold tracking-tight text-tinta">
+        <h1 className="font-marca text-2xl font-semibold tracking-tight text-tinta">
           Conexión con Claude
         </h1>
         <p className="mt-1 text-sm text-texto-suave">

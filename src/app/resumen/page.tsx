@@ -129,7 +129,7 @@ export default async function PaginaResumen({
 
         <main className="mt-5 flex-1">
           <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2">
-            <h1 className="text-xl font-bold tracking-tight text-tinta">
+            <h1 className="font-marca text-xl font-semibold tracking-tight text-tinta">
               Resumen
             </h1>
             <div className="flex items-center gap-1">

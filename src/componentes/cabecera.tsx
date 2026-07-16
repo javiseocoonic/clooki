@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Persona } from "@/lib/tipos";
 import { cerrarSesion } from "@/app/login/acciones";
+import { Logotipo } from "@/componentes/logotipo";
 
 const ESTILO_NAV =
   "rounded-lg px-2.5 py-1.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-acento";
@@ -32,9 +33,9 @@ export function Cabecera({
     <header className="flex items-center gap-2 border-b border-borde pb-3">
       <Link
         href="/"
-        className="text-lg font-bold tracking-tight text-tinta focus-visible:outline-2 focus-visible:outline-acento"
+        className="mr-1 rounded-sm text-tinta focus-visible:outline-2 focus-visible:outline-acento"
       >
-        Clooki
+        <Logotipo className="text-lg" />
       </Link>
       {persona.rol === "admin" && (
         <nav aria-label="Secciones" className="flex items-center gap-1">

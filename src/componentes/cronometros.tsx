@@ -430,6 +430,12 @@ export function SesionesAntiguas() {
                   : "border-error focus:ring-error/25"
               }`}
             />
+            {/* Excepción deliberada al rojo de marca de los botones primarios:
+                este botón vive DENTRO de una tarjeta de aviso ámbar, y un
+                relleno rojo sobre ámbar es el patrón de "confirmar acción
+                destructiva". Aquí la semántica sería justo la contraria:
+                Confirmar guarda las horas y Descartar es el que las tira.
+                Se queda en tinta neutra para no señalar peligro donde no lo hay. */}
             <button
               type="button"
               disabled={!valido}

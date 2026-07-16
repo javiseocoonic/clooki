@@ -176,6 +176,78 @@ Escala 4px. Contenedor de página `max-w-5xl` (ya está bien). Densidad de la ta
 - Confirmación por celda: parpadeo de borde acento → normal en **~900ms**.
 - Con `prefers-reduced-motion`: los cambios de estado son instantáneos, pero **siguen ocurriendo** (no se elimina el feedback, solo la animación).
 
+### 2.6 Capa de marca (Coonic) — añadida jul 2026
+
+Clooki es producto de Coonic y ahora lo parece. Esta capa **se suma** a la §2.1
+sin sustituirla: el acento indigo sigue siendo el estado funcional (foco, hoy,
+selección, enlaces) y los estados conservan sus colores. Lo que entra es la
+identidad, en dos canales: **color de marca** y **tipografía de marca**.
+
+La marca de Coonic (analizada en coonicandalucia.es): geométrica en minúsculas,
+tracking abierto, **rojo `#E72D48`** sobre negro, y un punto sobredimensionado
+en la "i" como firma.
+
+#### La regla del rojo — no la rompas
+
+El rojo de marca y el rojo de error son la misma familia de color con dos
+trabajos distintos. **Se separan por la forma, no por el tono:**
+
+| Forma | Significado | Tokens |
+|---|---|---|
+| Rojo como **relleno** (`bg-*`) | Marca y acción primaria | `bg-marca-accion` |
+| Rojo como **borde, texto o tinte** | **Solo error de sistema** | `border-error`, `text-error`, `bg-error-suave` |
+
+Nunca uses `text-marca`, `border-marca` ni `ring-marca`: convertirían la marca
+en una señal de fallo. El acento indigo **no** se sustituye por rojo — el brief
+eligió el indigo porque esto es una herramienta de trabajo, no un CTA, y eso
+sigue vigente.
+
+```css
+--marca: #e72d48;               /* rojo exacto del logotipo. Solo el mark gráfico */
+--marca-accion: #d42741;        /* relleno de botón primario */
+--marca-accion-fuerte: #b81f36; /* su hover */
+--sobre-marca: #ffffff;         /* texto encima */
+```
+
+**Por qué dos rojos:** el blanco sobre el rojo Coonic puro se queda en 4,32:1 y
+**suspende AA**. `--marca-accion` lo oscurece lo justo para llegar a 5,04:1
+(hover: 6,39:1). El rojo puro se reserva al logotipo, que es gráfico y no lleva
+texto encima. Medido, no estimado.
+
+**Excepción documentada:** el botón "Confirmar" de `cronometros.tsx` se queda en
+`bg-tinta`. Vive dentro de una tarjeta de aviso ámbar, y un relleno rojo sobre
+ámbar es el patrón de "confirmar acción destructiva" — justo al revés de lo que
+pasa ahí (Confirmar guarda las horas; Descartar es el que las tira). Si tocas
+ese bloque, mantén la excepción.
+
+#### Tipografía de marca
+
+**Poppins** (la geométrica de Coonic) entra **solo** en wordmark y títulos de
+página. El cuerpo, la rejilla y todos los datos siguen en **Geist**: sus cifras
+tabulares son mejores y la §2.2 no cambia para nada más.
+
+- Token: `font-marca`. Se usa junto a `font-normal` (400) o `font-semibold` (600).
+- ⚠️ **Nunca `font-bold` con `font-marca`**: el peso 700 no se carga en
+  `layout.tsx` y el navegador lo sintetizaría, deformando la letra. Si hace
+  falta 700, añádelo antes al array `weight` de `Poppins()`.
+- La fila "Wordmark Clooki" de la tabla §2.2 queda sustituida por el componente
+  `<Logotipo />`; el resto de la escala tipográfica sigue igual.
+
+#### Logotipo
+
+`src/componentes/logotipo.tsx` — wordmark en Poppins con la "i" escrita como
+`ı` (U+0131, sin punto) y un reloj rojo ocupando el hueco del punto: el gesto
+de Coonic, releído al producto. Escala con `font-size` (`<Logotipo className="text-4xl" />`);
+toda su geometría va en `em` y sale de **medir Poppins en canvas**, no de tantear.
+
+Comportamiento buscado, no un fallo: de ~24px hacia abajo las agujas dejan de
+leerse y el mark degrada a un **aro rojo** — que es exactamente el punto-firma
+de Coonic. A 32px o más se lee el reloj. Si retocas la geometría, revísala en
+todo el rango (16 → 72px) y en ambos temas.
+
+Sitios de marca: cabecera (18px), login (36px, el único momento puramente de
+marca), pantalla de "sin acceso" (24px) y `src/app/icon.svg` (favicon).
+
 ---
 
 ## 3. Diagnóstico del estado actual (archivo · comportamiento · principio violado)

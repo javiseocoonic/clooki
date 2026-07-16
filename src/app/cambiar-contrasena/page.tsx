@@ -8,7 +8,7 @@ export default function PaginaCambiarContrasena() {
   return (
     <main className="flex flex-1 items-center justify-center p-6">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold tracking-tight text-tinta">
+        <h1 className="font-marca text-2xl font-semibold tracking-tight text-tinta">
           Cambiar contraseña
         </h1>
         <p className="mt-1 mb-8 text-sm text-texto-suave">
