@@ -55,7 +55,7 @@ begin
   select p.* into v
   from claves_api k
   join personas p on p.id = k.persona_id
-  where k.hash = encode(digest(p_clave, 'sha256'), 'hex')
+  where k.hash = encode(extensions.digest(p_clave, 'sha256'), 'hex')
     and p.activo;
   if not found then
     raise exception 'Token inválido o revocado';
