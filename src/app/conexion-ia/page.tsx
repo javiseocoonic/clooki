@@ -66,9 +66,12 @@ export default async function PaginaConexionIa() {
               </li>
             </ul>
             <p className="mt-2">
-              Endpoint: <code className="select-all">{urlMcp}</code> · cabecera{" "}
-              <code>Authorization: Bearer &lt;token&gt;</code>. En claude.ai se
-              añade como conector personalizado con esa URL.
+              Dos formas de conectar (se muestran al generar el token): en{" "}
+              <strong>claude.ai</strong> como conector personalizado con la URL
+              que incluye tu clave (sin terminal, vale para todos tus
+              dispositivos), o en <strong>Claude Code</strong> con{" "}
+              <code>claude mcp add</code> y la cabecera{" "}
+              <code>Authorization: Bearer</code>.
             </p>
           </div>
         </div>

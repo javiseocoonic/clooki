@@ -361,9 +361,11 @@ function rpcError(id: number | string | null, code: number, message: string) {
 
 export async function POST(request: NextRequest) {
   const autorizacion = request.headers.get("authorization") ?? "";
+  // Token por cabecera Bearer (Claude Code) o por URL ?clave= (los
+  // conectores de claude.ai no permiten cabeceras personalizadas).
   const clave = autorizacion.startsWith("Bearer ")
     ? autorizacion.slice(7).trim()
-    : "";
+    : (request.nextUrl.searchParams.get("clave") ?? "").trim();
   if (!clave) {
     return new Response(
       JSON.stringify({ error: "Falta el token. Genera el tuyo en /conexion-ia." }),

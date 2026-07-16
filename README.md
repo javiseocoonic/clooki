@@ -36,14 +36,16 @@ Variables de entorno en `.env.local` (ver `.env.example`).
 
 Cada persona genera su token en **/conexion-ia** (actúa en su nombre, con
 sus mismos permisos: miembro = sus horas; admin = también el resumen).
-Conectar en Claude Code:
+
+- **claude.ai (sin terminal; se sincroniza en todos los dispositivos de la
+  cuenta):** Ajustes → Conectores → Añadir conector personalizado con
+  `https://<dominio>/api/mcp?clave=clk_...` (la URL exacta se muestra al
+  generar el token).
+- **Claude Code (por máquina):**
 
 ```bash
 claude mcp add --transport http clooki https://<dominio>/api/mcp --header "Authorization: Bearer clk_..."
-```
-
-En claude.ai: Configuración → Conectores → añadir conector personalizado con
-esa URL y la cabecera. Herramientas: `apuntar_horas`, `mis_horas`,
+``` Herramientas: `apuntar_horas`, `mis_horas`,
 `resumen_horas` (admin), `listar_catalogo`. Requiere la migración
 `004_mcp.sql`. El endpoint no usa service role: la seguridad vive en
 funciones `SECURITY DEFINER` que validan el token en cada llamada.
