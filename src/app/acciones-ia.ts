@@ -138,11 +138,12 @@ REGLAS:
   let bruto: unknown;
   try {
     const respuesta = await anthropic.messages.create({
-      model: "claude-opus-4-8",
+      // Haiku: el modelo más barato; suficiente para parsear frases.
+      // (No admite `effort`; la salida estructurada sí está soportada.)
+      model: "claude-haiku-4-5",
       max_tokens: 2000,
       system: sistema,
       output_config: {
-        effort: "low",
         format: { type: "json_schema", schema: ESQUEMA_SALIDA },
       },
       messages: [{ role: "user", content: texto }],

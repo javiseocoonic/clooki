@@ -34,8 +34,9 @@ empleados: sin cuotas ni objetivos de horas.
    MCP personales no sirven para todos — la caja en la propia app resuelve la
    identidad con el login de Clooki. "ayer 3h viamed rrss" → propuestas con
    **vista previa confirmable** (la IA propone, la persona confirma). Requiere
-   `ANTHROPIC_API_KEY` (clave de empresa) en Vercel; modelo `claude-opus-4-8`
-   con salida estructurada (~1 céntimo por frase).
+   `ANTHROPIC_API_KEY` (clave de empresa) en Vercel; modelo `claude-haiku-4-5`
+   (el más barato, decisión del cliente) con salida estructurada — fracciones
+   de céntimo por frase.
 4. **Síntesis de notas por cliente** — resumen mensual en prosa de en qué se
    fueron las horas de un cliente, a partir de las notas de línea. Esperar a
    que haya notas reales antes de construirlo.
