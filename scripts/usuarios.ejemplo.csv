@@ -1,0 +1,18 @@
+# Copia este archivo a scripts/usuarios.csv y rellena las contraseñas.
+# Formato: email;contraseña
+# Miembros: su DNI (con letra, sin guiones). Admins: la que elijan
+# (o una temporal — luego pueden cambiarla en /cambiar-contrasena).
+# usuarios.csv está en .gitignore: no se sube al repositorio.
+iluque@coonic.com;CAMBIAR-admin
+jfernandez@coonic.com;CAMBIAR-admin
+kwhaite@coonic.com;CAMBIAR-admin
+acerezo@coonic.com;00000000A
+ebelda@coonic.com;00000000A
+mlgomez@coonic.com;00000000A
+aberthoud@coonic.com;00000000A
+nobregon@coonic.com;00000000A
+cramirez@coonic.com;00000000A
+pmarinetto@coonic.com;00000000A
+mdelgado@coonic.com;00000000A
+irubio@coonic.com;00000000A
+lquintero@coonic.com;00000000A
