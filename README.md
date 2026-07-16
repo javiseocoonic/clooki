@@ -34,8 +34,8 @@ Variables de entorno en `.env.local` (ver `.env.example`).
 
 ## Estructura
 
-- `src/app/` — pantallas (login, Mi semana, cambiar contraseña; Resumen y
-  Gestión llegarán en el punto 3)
+- `src/app/` — pantallas (login, Mi semana, cambiar contraseña, Resumen y
+  Gestión — estas dos, solo admin)
 - `scripts/crear-usuarios.mjs` — alta de usuarios en Supabase Auth
 - `src/lib/tipos.ts` — tipos del esquema
 - `src/lib/semana.ts` — utilidades de semana/horas

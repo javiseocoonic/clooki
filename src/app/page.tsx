@@ -8,6 +8,7 @@ import {
 } from "@/lib/semana";
 import { RejillaSemana } from "@/componentes/rejilla-semana";
 import { AvisoSemanaIncompleta } from "@/componentes/aviso-semana-incompleta";
+import { Cabecera } from "@/componentes/cabecera";
 import {
   BandejaCronometros,
   ProveedorCronometros,
@@ -50,8 +51,6 @@ export default async function PaginaMiSemana({
   }
 
   const { persona } = datos;
-  const estiloNav =
-    "rounded-lg px-2.5 py-1.5 text-sm text-texto-suave transition-colors hover:bg-superficie-2 hover:text-tinta focus-visible:outline-2 focus-visible:outline-acento";
 
   return (
     <ProveedorCronometros
@@ -60,36 +59,9 @@ export default async function PaginaMiSemana({
       clientes={datos.clientes}
     >
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-4 sm:px-6">
-      {/* Barra superior: identidad + navegación de app */}
-      <header className="flex items-center gap-2 border-b border-borde pb-3">
-        <span className="text-lg font-bold tracking-tight text-tinta">
-          Clooki
-        </span>
-        {persona.rol === "admin" && (
-          <nav aria-label="Admin" className="flex items-center gap-1">
-            <Link href="/resumen" className={estiloNav}>
-              Resumen
-            </Link>
-            <Link href="/gestion" className={estiloNav}>
-              Gestión
-            </Link>
-          </nav>
-        )}
-        <span className="ml-auto">
-          <BandejaCronometros clientes={datos.clientes} />
-        </span>
-        <span className="hidden text-sm text-texto-suave sm:inline">
-          {persona.nombre}
-        </span>
-        <Link href="/cambiar-contrasena" className={estiloNav}>
-          Contraseña
-        </Link>
-        <form action={cerrarSesion}>
-          <button type="submit" className={estiloNav}>
-            Salir
-          </button>
-        </form>
-      </header>
+      <Cabecera persona={persona} seccion="semana">
+        <BandejaCronometros clientes={datos.clientes} />
+      </Cabecera>
 
       <main className="mt-5 flex-1">
         <SesionesAntiguas />

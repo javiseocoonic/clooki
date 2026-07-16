@@ -74,6 +74,13 @@ export function diasDeSemana(lunesIso: string): string[] {
   });
 }
 
+/** ¿Es una fecha ISO `YYYY-MM-DD` válida? */
+export function esFechaIso(valor: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) return false;
+  const d = deIso(valor);
+  return !Number.isNaN(d.getTime()) && aIso(d) === valor;
+}
+
 /** ¿Es un lunes válido en ISO? (defensa para el parámetro de URL `?semana=`) */
 export function esLunesIso(valor: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) return false;
