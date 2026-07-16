@@ -37,6 +37,18 @@ export type RegistroHoras = {
   actualizado_en: string;
 }
 
+export type SesionCronometro = {
+  id: string;
+  persona_id: string;
+  proyecto_id: string;
+  /** timestamptz ISO */
+  inicio: string;
+  /** `YYYY-MM-DD` local del usuario al arrancar */
+  dia_atribuido: string;
+  fin: string | null;
+  horas_volcadas: number | null;
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -68,11 +80,25 @@ export type Database = {
         Update: Partial<Omit<RegistroHoras, "id">>;
         Relationships: [];
       };
+      cronometros: {
+        Row: SesionCronometro;
+        Insert: Pick<
+          SesionCronometro,
+          "persona_id" | "proyecto_id" | "dia_atribuido"
+        > &
+          Partial<SesionCronometro>;
+        Update: Partial<Omit<SesionCronometro, "id">>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
       persona_actual_id: { Args: Record<string, never>; Returns: string | null };
       es_admin: { Args: Record<string, never>; Returns: boolean };
+      parar_cronometro: {
+        Args: { p_id: string; p_horas?: number | null };
+        Returns: { volcado: number; total: number };
+      };
     };
     Enums: { rol_persona: Rol };
     CompositeTypes: Record<string, never>;

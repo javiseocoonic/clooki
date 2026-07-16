@@ -1,6 +1,12 @@
 import { crearClienteServidor } from "@/lib/supabase/servidor";
 import { diasDeSemana, sumarSemanas } from "@/lib/semana";
-import type { Cliente, Persona, Proyecto, RegistroHoras } from "@/lib/tipos";
+import type {
+  Cliente,
+  Persona,
+  Proyecto,
+  RegistroHoras,
+  SesionCronometro,
+} from "@/lib/tipos";
 
 /** Semanas hacia atrás que se miran para "recordar" las líneas de trabajo. */
 const SEMANAS_RECORDADAS = 6;
@@ -26,6 +32,8 @@ export interface DatosMiSemana {
    * página solo lo muestra cuando la semana visible es la actual.
    */
   diasSinHorasSemanaAnterior: number;
+  /** Sesiones de cronómetro activas de la persona (fin = null). */
+  sesiones: SesionCronometro[];
 }
 
 /**
@@ -55,7 +63,7 @@ export async function cargarMiSemana(
   const dias = diasDeSemana(lunesIso);
   const desdeRecordado = sumarSemanas(lunesIso, -SEMANAS_RECORDADAS);
 
-  const [clientesRes, proyectosRes, horasRes, recientesRes] =
+  const [clientesRes, proyectosRes, horasRes, recientesRes, sesionesRes] =
     await Promise.all([
       supabase.from("clientes").select("*").eq("activo", true).order("nombre"),
       supabase.from("proyectos").select("*").order("nombre"),
@@ -71,6 +79,11 @@ export async function cargarMiSemana(
         .eq("persona_id", persona.id)
         .gte("fecha", desdeRecordado)
         .lt("fecha", dias[0]),
+      supabase
+        .from("cronometros")
+        .select("*")
+        .eq("persona_id", persona.id)
+        .is("fin", null),
     ]);
 
   const clientes = clientesRes.data ?? [];
@@ -117,5 +130,6 @@ export async function cargarMiSemana(
     lineas,
     horas,
     diasSinHorasSemanaAnterior,
+    sesiones: sesionesRes.data ?? [],
   };
 }

@@ -8,6 +8,11 @@ import {
 } from "@/lib/semana";
 import { RejillaSemana } from "@/componentes/rejilla-semana";
 import { AvisoSemanaIncompleta } from "@/componentes/aviso-semana-incompleta";
+import {
+  BandejaCronometros,
+  ProveedorCronometros,
+  SesionesAntiguas,
+} from "@/componentes/cronometros";
 import { cerrarSesion } from "./login/acciones";
 
 export default async function PaginaMiSemana({
@@ -49,6 +54,11 @@ export default async function PaginaMiSemana({
     "rounded-lg px-2.5 py-1.5 text-sm text-texto-suave transition-colors hover:bg-superficie-2 hover:text-tinta focus-visible:outline-2 focus-visible:outline-acento";
 
   return (
+    <ProveedorCronometros
+      personaId={persona.id}
+      sesionesIniciales={datos.sesiones}
+      clientes={datos.clientes}
+    >
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-4 sm:px-6">
       {/* Barra superior: identidad + navegación de app */}
       <header className="flex items-center gap-2 border-b border-borde pb-3">
@@ -65,13 +75,13 @@ export default async function PaginaMiSemana({
             </Link>
           </nav>
         )}
-        <span className="ml-auto hidden text-sm text-texto-suave sm:inline">
+        <span className="ml-auto">
+          <BandejaCronometros clientes={datos.clientes} />
+        </span>
+        <span className="hidden text-sm text-texto-suave sm:inline">
           {persona.nombre}
         </span>
-        <Link
-          href="/cambiar-contrasena"
-          className={`${estiloNav} ml-auto sm:ml-0`}
-        >
+        <Link href="/cambiar-contrasena" className={estiloNav}>
           Contraseña
         </Link>
         <form action={cerrarSesion}>
@@ -82,6 +92,7 @@ export default async function PaginaMiSemana({
       </header>
 
       <main className="mt-5 flex-1">
+        <SesionesAntiguas />
         {/* Título de la vista + navegación de semana agrupada */}
         <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
           <h1 className="text-xl font-bold tracking-tight text-tinta">
@@ -133,5 +144,6 @@ export default async function PaginaMiSemana({
         />
       </main>
     </div>
+    </ProveedorCronometros>
   );
 }

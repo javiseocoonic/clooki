@@ -20,9 +20,19 @@ import {
   interpretarHoras,
   redondearAPaso,
 } from "@/lib/semana";
-import type { Cliente, Proyecto, RegistroHoras } from "@/lib/tipos";
+import type {
+  Cliente,
+  Proyecto,
+  RegistroHoras,
+  SesionCronometro,
+} from "@/lib/tipos";
 import type { ProyectoConCliente } from "@/lib/datos/mi-semana";
 import { AnadirLinea } from "./anadir-linea";
+import {
+  duracionMs,
+  formatearDuracion,
+  useCronometros,
+} from "./cronometros";
 
 type EstadoCelda = "guardando" | "error" | "invalido" | "confirmado";
 
@@ -133,6 +143,21 @@ export function RejillaSemana({
 
   const hoy = useHoy();
   const conectado = useConectado();
+  const crono = useCronometros();
+  const sesionPorProyecto = useMemo(() => {
+    const m = new Map<string, SesionCronometro>();
+    crono?.sesiones.forEach((s) => m.set(s.proyecto_id, s));
+    return m;
+     
+  }, [crono?.sesiones]);
+
+  function sesionEnCelda(
+    proyectoId: string,
+    fecha: string,
+  ): SesionCronometro | undefined {
+    const s = sesionPorProyecto.get(proyectoId);
+    return s && s.dia_atribuido === fecha ? s : undefined;
+  }
   const [diaMovilElegido, setDiaMovilElegido] = useState<string | null>(null);
   const diaMovil =
     diaMovilElegido ?? (hoy && dias.includes(hoy) ? hoy : dias[0]);
@@ -314,6 +339,44 @@ export function RejillaSemana({
     return () => window.removeEventListener("online", alVolver);
   }, []);
 
+  // Eventos de cronómetro: volcar el total a la celda al parar y añadir
+  // la línea automáticamente al arrancar desde la bandeja (§11.3.e).
+  const lineasVisiblesRef = useRef<ProyectoConCliente[]>([]);
+  useEffect(() => {
+    lineasVisiblesRef.current = lineasVisibles;
+  });
+  useEffect(() => {
+    if (!crono) return;
+    return crono.suscribir((e) => {
+      if (e.tipo === "volcado") {
+        if (!e.fecha || !dias.includes(e.fecha)) return;
+        const k = clave(e.proyectoId, e.fecha);
+        const total = e.total ?? 0;
+        if (total > 0) {
+          ponerValor(k, formatearHoras(total));
+          setGuardadas((prev) => {
+            const s = { ...prev, [k]: total };
+            guardadasRef.current = s;
+            return s;
+          });
+        }
+        return;
+      }
+      // inicio
+      if (lineasVisiblesRef.current.some((l) => l.id === e.proyectoId)) return;
+      for (const c of clientes) {
+        const p = c.proyectos.find((pr) => pr.id === e.proyectoId);
+        if (p) {
+          anadirLineas([
+            { ...p, cliente: { id: c.id, nombre: c.nombre, activo: c.activo } },
+          ]);
+          return;
+        }
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [crono?.suscribir, dias]);
+
   // ── Notas ──
 
   async function guardarNota(proyectoId: string) {
@@ -388,10 +451,15 @@ export function RejillaSemana({
 
     let guardadasOk = 0;
     let sinGuardar = 0;
+    let omitidas = 0;
     trozos.forEach((trozo, i) => {
       const idxDia = indicesVisibles[desde + i];
       if (idxDia === undefined) return; // sobrantes: se ignoran
       const fecha = dias[idxDia];
+      if (sesionEnCelda(linea.id, fecha)) {
+        omitidas++; // no se pisa una celda con cronómetro en marcha
+        return;
+      }
       const k = clave(linea.id, fecha);
       const res = interpretarHoras(trozo);
       if (typeof res === "number") {
@@ -407,7 +475,10 @@ export function RejillaSemana({
 
     mostrarBadge(
       `Pegadas ${guardadasOk} celda${guardadasOk === 1 ? "" : "s"}` +
-        (sinGuardar > 0 ? ` · ${sinGuardar} sin guardar` : ""),
+        (sinGuardar > 0 ? ` · ${sinGuardar} sin guardar` : "") +
+        (omitidas > 0
+          ? ` · ${omitidas} omitida${omitidas === 1 ? "" : "s"}: cronómetro en marcha`
+          : ""),
       3000,
     );
   }
@@ -593,6 +664,32 @@ export function RejillaSemana({
     const esHoy = hoy === fecha;
     const enTabla = opciones !== undefined;
 
+    // Celda con cronómetro en marcha: solo lectura (§11.3.c).
+    const sesion = crono ? sesionEnCelda(linea.id, fecha) : undefined;
+    if (sesion && crono) {
+      const guardado = guardadas[k];
+      return (
+        <div
+          role="status"
+          tabIndex={-1}
+          title="Cronómetro en marcha. Páralo para editar a mano."
+          aria-label={`Cronómetro en marcha en ${linea.cliente.nombre} — ${linea.nombre}`}
+          className={`flex w-full cursor-not-allowed items-center justify-center gap-1 rounded-md border border-acento bg-acento-suave px-1 text-xs font-medium text-acento ${
+            enTabla ? "h-10" : "h-11"
+          }`}
+        >
+          <span
+            aria-hidden="true"
+            className="punto-pulso size-1.5 shrink-0 rounded-full bg-acento"
+          />
+          <span className="truncate tabular-nums">
+            {guardado !== undefined ? `${formatearHoras(guardado)} · ` : ""}+
+            {formatearDuracion(duracionMs(sesion, crono.ahora))}
+          </span>
+        </div>
+      );
+    }
+
     const clasesEstado =
       estado === "invalido"
         ? "border-aviso bg-aviso-suave text-aviso focus:ring-2 focus:ring-aviso/25"
@@ -642,8 +739,50 @@ export function RejillaSemana({
 
   function botonesLinea(linea: ProyectoConCliente) {
     const notaPuesta = Boolean((notas[linea.id] ?? "").trim());
+    const sesion = sesionPorProyecto.get(linea.id);
     return (
       <span className="flex items-center">
+        {crono && (
+          <button
+            type="button"
+            onClick={() =>
+              sesion
+                ? void crono.parar(sesion.id)
+                : void crono.arrancar(linea.id)
+            }
+            aria-label={
+              sesion
+                ? `Parar cronómetro de ${linea.nombre}`
+                : `Empezar cronómetro de ${linea.nombre}`
+            }
+            title={sesion ? "Parar" : "Empezar cronómetro (cuenta para hoy)"}
+            className={`flex size-11 items-center justify-center rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-acento sm:size-10 ${
+              sesion
+                ? "text-acento hover:bg-acento-suave"
+                : "text-texto-suave hover:bg-superficie-2 hover:text-acento"
+            }`}
+          >
+            {sesion ? (
+              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+                <rect
+                  x="2.5"
+                  y="2.5"
+                  width="9"
+                  height="9"
+                  rx="1.5"
+                  fill="currentColor"
+                />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path
+                  d="M4 2.8v8.4a.6.6 0 0 0 .9.5l7-4.2a.6.6 0 0 0 0-1l-7-4.2a.6.6 0 0 0-.9.5Z"
+                  fill="currentColor"
+                />
+              </svg>
+            )}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => alternarNota(linea.id)}
@@ -663,7 +802,7 @@ export function RejillaSemana({
             />
           </svg>
         </button>
-        {sinHoras(linea.id) && (
+        {sinHoras(linea.id) && !sesion && (
           <button
             type="button"
             onClick={() => quitarLinea(linea.id)}
@@ -928,23 +1067,37 @@ export function RejillaSemana({
                       </span>
                     </div>
                     {botonesLinea(linea)}
-                    <button
-                      type="button"
-                      onClick={() => ajustarCelda(linea, diaMovil, -PASO_HORAS)}
-                      aria-label={`Quitar 0,25 h de ${linea.nombre}`}
-                      className="flex size-11 shrink-0 items-center justify-center rounded-md border border-borde text-lg text-texto transition-colors hover:bg-superficie-2 focus-visible:outline-2 focus-visible:outline-acento"
-                    >
-                      −
-                    </button>
-                    <div className="w-14 shrink-0">{celdaInput(linea, diaMovil)}</div>
-                    <button
-                      type="button"
-                      onClick={() => ajustarCelda(linea, diaMovil, PASO_HORAS)}
-                      aria-label={`Añadir 0,25 h a ${linea.nombre}`}
-                      className="flex size-11 shrink-0 items-center justify-center rounded-md border border-borde text-lg text-texto transition-colors hover:bg-superficie-2 focus-visible:outline-2 focus-visible:outline-acento"
-                    >
-                      +
-                    </button>
+                    {crono && sesionEnCelda(linea.id, diaMovil) ? (
+                      <div className="w-32 shrink-0">
+                        {celdaInput(linea, diaMovil)}
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            ajustarCelda(linea, diaMovil, -PASO_HORAS)
+                          }
+                          aria-label={`Quitar 0,25 h de ${linea.nombre}`}
+                          className="flex size-11 shrink-0 items-center justify-center rounded-md border border-borde text-lg text-texto transition-colors hover:bg-superficie-2 focus-visible:outline-2 focus-visible:outline-acento"
+                        >
+                          −
+                        </button>
+                        <div className="w-14 shrink-0">
+                          {celdaInput(linea, diaMovil)}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            ajustarCelda(linea, diaMovil, PASO_HORAS)
+                          }
+                          aria-label={`Añadir 0,25 h a ${linea.nombre}`}
+                          className="flex size-11 shrink-0 items-center justify-center rounded-md border border-borde text-lg text-texto transition-colors hover:bg-superficie-2 focus-visible:outline-2 focus-visible:outline-acento"
+                        >
+                          +
+                        </button>
+                      </>
+                    )}
                   </div>
                   {notasAbiertas.has(linea.id) && (
                     <div className="mt-2">{inputNota(linea)}</div>
