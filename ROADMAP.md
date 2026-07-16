@@ -19,7 +19,7 @@ empleados: sin cuotas ni objetivos de horas.
 
 ## Fase IA (aprobada 17 jul 2026, en este orden)
 
-1. **Servidor MCP de Clooki** — *después del punto 3, primera pieza de IA.*
+1. **Servidor MCP de Clooki** — ✅ jul 2026 (`/api/mcp` + `/conexion-ia` + migración 004).
    Apuntar horas y consultar datos desde Claude, donde el equipo ya trabaja:
    - Escribir: "apunta 2h de hoy a Viamed desarrollo web" → upsert con las
      mismas validaciones y RLS (token por usuario; nunca service role).

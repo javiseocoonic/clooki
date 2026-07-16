@@ -32,6 +32,22 @@ Variables de entorno en `.env.local` (ver `.env.example`).
 3. El acceso está restringido a correos `@coonic.com` en el login; quien no
    tenga fila activa en `personas` no ve ningún dato (RLS).
 
+## Conexión con Claude (MCP)
+
+Cada persona genera su token en **/conexion-ia** (actúa en su nombre, con
+sus mismos permisos: miembro = sus horas; admin = también el resumen).
+Conectar en Claude Code:
+
+```bash
+claude mcp add --transport http clooki https://<dominio>/api/mcp --header "Authorization: Bearer clk_..."
+```
+
+En claude.ai: Configuración → Conectores → añadir conector personalizado con
+esa URL y la cabecera. Herramientas: `apuntar_horas`, `mis_horas`,
+`resumen_horas` (admin), `listar_catalogo`. Requiere la migración
+`004_mcp.sql`. El endpoint no usa service role: la seguridad vive en
+funciones `SECURITY DEFINER` que validan el token en cada llamada.
+
 ## Estructura
 
 - `src/app/` — pantallas (login, Mi semana, cambiar contraseña, Resumen y

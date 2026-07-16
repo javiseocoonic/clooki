@@ -1,0 +1,60 @@
+"use client";
+
+import { useActionState } from "react";
+import { generarToken, type EstadoToken } from "./acciones";
+
+const ESTADO_INICIAL: EstadoToken = { token: null, mensaje: null };
+
+export function GeneradorToken({
+  yaExiste,
+  urlMcp,
+}: {
+  yaExiste: boolean;
+  urlMcp: string;
+}) {
+  const [estado, accion, pendiente] = useActionState(
+    generarToken,
+    ESTADO_INICIAL,
+  );
+
+  if (estado.token) {
+    const comando = `claude mcp add --transport http clooki ${urlMcp} --header "Authorization: Bearer ${estado.token}"`;
+    return (
+      <div className="rounded-lg border border-exito/40 bg-exito-suave p-3">
+        <p className="text-sm font-medium text-exito">
+          Token generado. Cópialo ahora: no se volverá a mostrar.
+        </p>
+        <code className="mt-2 block select-all break-all rounded-md bg-superficie px-3 py-2 font-mono text-sm text-tinta">
+          {estado.token}
+        </code>
+        <p className="mt-3 text-xs text-texto-suave">
+          Para conectarlo a Claude Code, ejecuta en tu terminal:
+        </p>
+        <code className="mt-1 block select-all break-all rounded-md bg-superficie px-3 py-2 font-mono text-xs text-texto">
+          {comando}
+        </code>
+      </div>
+    );
+  }
+
+  return (
+    <form action={accion} className="flex flex-col gap-2">
+      {estado.mensaje && (
+        <p className="text-sm text-error" role="alert">
+          {estado.mensaje}
+        </p>
+      )}
+      <button
+        type="submit"
+        disabled={pendiente}
+        className="self-start rounded-lg bg-tinta px-4 py-2.5 text-sm font-semibold text-superficie transition-colors hover:bg-texto focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-50"
+      >
+        {pendiente
+          ? "Generando…"
+          : yaExiste
+            ? "Regenerar token (revoca el anterior)"
+            : "Generar mi token"}
+      </button>
+    </form>
+  );
+}

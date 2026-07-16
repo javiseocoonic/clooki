@@ -53,6 +53,12 @@ export function Cabecera({
       <span className="hidden text-sm text-texto-suave sm:inline">
         {persona.nombre}
       </span>
+      <Link
+        href="/conexion-ia"
+        className={`${claseEnlace(false)} hidden sm:inline-block`}
+      >
+        Claude
+      </Link>
       <Link href="/cambiar-contrasena" className={claseEnlace(false)}>
         Contraseña
       </Link>

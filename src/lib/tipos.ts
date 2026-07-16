@@ -49,6 +49,27 @@ export type SesionCronometro = {
   horas_volcadas: number | null;
 }
 
+export type ClaveApi = {
+  id: string;
+  persona_id: string;
+  /** SHA-256 hex del token; el token en claro nunca se guarda. */
+  hash: string;
+  creada_en: string;
+  usada_en: string | null;
+}
+
+/** Fila que devuelve mcp_horas_rango. */
+export type FilaHorasMcp = {
+  persona_id: string;
+  persona: string;
+  cliente: string;
+  proyecto: string;
+  fecha: string;
+  horas: number;
+  nota: string | null;
+  actualizado_en: string;
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -90,6 +111,12 @@ export type Database = {
         Update: Partial<Omit<SesionCronometro, "id">>;
         Relationships: [];
       };
+      claves_api: {
+        Row: ClaveApi;
+        Insert: Pick<ClaveApi, "persona_id" | "hash"> & Partial<ClaveApi>;
+        Update: Partial<Omit<ClaveApi, "id">>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -98,6 +125,37 @@ export type Database = {
       parar_cronometro: {
         Args: { p_id: string; p_horas?: number | null };
         Returns: { volcado: number; total: number };
+      };
+      mcp_persona: {
+        Args: { p_clave: string };
+        Returns: { id: string; nombre: string; rol: Rol };
+      };
+      mcp_catalogo: {
+        Args: { p_clave: string };
+        Returns: {
+          id: string;
+          nombre: string;
+          proyectos: { id: string; nombre: string }[];
+        }[];
+      };
+      mcp_horas_rango: {
+        Args: { p_clave: string; p_desde: string; p_hasta: string };
+        Returns: FilaHorasMcp[];
+      };
+      mcp_personas: {
+        Args: { p_clave: string };
+        Returns: { id: string; nombre: string }[];
+      };
+      mcp_apuntar: {
+        Args: {
+          p_clave: string;
+          p_proyecto_id: string;
+          p_fecha: string;
+          p_horas: number;
+          p_nota?: string | null;
+          p_sumar?: boolean;
+        };
+        Returns: { accion: string; total: number };
       };
     };
     Enums: { rol_persona: Rol };

@@ -7,6 +7,12 @@ import { NextResponse, type NextRequest } from "next/server";
 // La autorización real (miembro vs admin, filas propias) vive en RLS.
 
 export async function proxy(request: NextRequest) {
+  // /api/mcp autentica por token Bearer en el propio handler: ni cookies
+  // ni refresco de sesión — se salta el proxy entero.
+  if (request.nextUrl.pathname.startsWith("/api/mcp")) {
+    return NextResponse.next();
+  }
+
   let respuesta = NextResponse.next({ request });
 
   const supabase = createServerClient(
