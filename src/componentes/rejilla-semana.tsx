@@ -41,6 +41,8 @@ interface Props {
   lunesIso: string;
   lineas: ProyectoConCliente[];
   clientes: (Cliente & { proyectos: Proyecto[] })[];
+  /** Ids de clientes con horas recientes de la persona, más reciente primero. */
+  clientesRecientes: string[];
   horas: RegistroHoras[];
 }
 
@@ -94,6 +96,7 @@ export function RejillaSemana({
   lunesIso,
   lineas,
   clientes,
+  clientesRecientes,
   horas,
 }: Props) {
   const supabase = useMemo(() => crearClienteNavegador(), []);
@@ -1128,6 +1131,7 @@ export function RejillaSemana({
       <div className="mt-4 flex flex-wrap items-start gap-3">
         <AnadirLinea
           clientes={clientes}
+          clientesRecientes={clientesRecientes}
           idsExcluidos={idsVisibles}
           alAnadir={anadirLineas}
         />

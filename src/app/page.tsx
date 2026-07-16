@@ -112,6 +112,7 @@ export default async function PaginaMiSemana({
           lunesIso={lunes}
           lineas={datos.lineas}
           clientes={datos.clientes}
+          clientesRecientes={datos.clientesRecientes}
           horas={datos.horas}
         />
       </main>

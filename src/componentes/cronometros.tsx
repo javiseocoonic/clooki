@@ -17,6 +17,7 @@ import {
 import { crearClienteNavegador } from "@/lib/supabase/navegador";
 import { aIso, formatearHoras, redondearAPaso } from "@/lib/semana";
 import type { Cliente, Proyecto, SesionCronometro } from "@/lib/tipos";
+import { BuscadorCliente } from "./buscador-cliente";
 
 const UMBRAL_AVISO_MS = 10 * 60 * 60 * 1000; // 10 h (§11.3.f)
 
@@ -327,23 +328,27 @@ export function BandejaCronometros({
               </button>
             ) : (
               <div className="flex flex-col gap-2 p-1">
-                <label className="sr-only" htmlFor="crono-cliente">
-                  Cliente
-                </label>
-                <select
-                  id="crono-cliente"
-                  autoFocus
-                  value={clienteId}
-                  onChange={(e) => setClienteId(e.target.value)}
-                  className="h-10 rounded-lg border border-borde-fuerte bg-superficie px-2 text-sm text-tinta outline-none focus:border-acento focus:ring-2 focus:ring-acento/20"
-                >
-                  <option value="">Cliente…</option>
-                  {clientesElegibles.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre}
-                    </option>
-                  ))}
-                </select>
+                {!clienteElegido ? (
+                  <BuscadorCliente
+                    opciones={clientesElegibles.map((c) => ({
+                      id: c.id,
+                      nombre: c.nombre,
+                    }))}
+                    alElegir={setClienteId}
+                  />
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 self-start rounded-full bg-acento-suave py-1 pl-3 pr-1 text-sm font-medium text-acento">
+                    {clienteElegido.nombre}
+                    <button
+                      type="button"
+                      onClick={() => setClienteId("")}
+                      aria-label={`Quitar ${clienteElegido.nombre} y volver a buscar`}
+                      className="flex size-6 items-center justify-center rounded-full transition-colors hover:bg-acento/15 focus-visible:outline-2 focus-visible:outline-acento"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )}
                 {clienteElegido && (
                   <ul className="max-h-40 overflow-y-auto">
                     {clienteElegido.proyectos.map((p) => (

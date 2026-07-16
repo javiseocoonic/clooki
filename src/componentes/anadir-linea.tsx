@@ -3,15 +3,23 @@
 import { useState } from "react";
 import type { Cliente, Proyecto } from "@/lib/tipos";
 import type { ProyectoConCliente } from "@/lib/datos/mi-semana";
+import { BuscadorCliente } from "./buscador-cliente";
 
 interface Props {
   clientes: (Cliente & { proyectos: Proyecto[] })[];
+  /** Ids de clientes con horas recientes del usuario, más reciente primero. */
+  clientesRecientes: string[];
   /** Proyectos ya presentes en la rejilla (no se ofrecen de nuevo). */
   idsExcluidos: string[];
   alAnadir: (lineas: ProyectoConCliente[]) => void;
 }
 
-export function AnadirLinea({ clientes, idsExcluidos, alAnadir }: Props) {
+export function AnadirLinea({
+  clientes,
+  clientesRecientes,
+  idsExcluidos,
+  alAnadir,
+}: Props) {
   const [abierto, setAbierto] = useState(false);
   const [clienteId, setClienteId] = useState("");
   const [marcados, setMarcados] = useState<Set<string>>(new Set());
@@ -81,29 +89,36 @@ export function AnadirLinea({ clientes, idsExcluidos, alAnadir }: Props) {
         if (e.key === "Escape") cerrar();
       }}
     >
-      <label
-        htmlFor="nuevo-cliente"
-        className="mb-1.5 block text-xs font-medium text-texto-suave"
-      >
-        Cliente
-      </label>
-      <select
-        id="nuevo-cliente"
-        autoFocus
-        value={clienteId}
-        onChange={(e) => {
-          setClienteId(e.target.value);
-          setMarcados(new Set());
-        }}
-        className="h-10 w-full rounded-lg border border-borde-fuerte bg-superficie px-2 text-sm text-tinta outline-none focus:border-acento focus:ring-2 focus:ring-acento/20"
-      >
-        <option value="">Elige un cliente…</option>
-        {clientesConOpciones.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.nombre}
-          </option>
-        ))}
-      </select>
+      <p className="mb-1.5 text-xs font-medium text-texto-suave">Cliente</p>
+
+      {!clienteElegido ? (
+        <BuscadorCliente
+          opciones={clientesConOpciones.map((c) => ({
+            id: c.id,
+            nombre: c.nombre,
+          }))}
+          recientes={clientesRecientes}
+          alElegir={(id) => {
+            setClienteId(id);
+            setMarcados(new Set());
+          }}
+        />
+      ) : (
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-acento-suave py-1 pl-3 pr-1 text-sm font-medium text-acento">
+          {clienteElegido.nombre}
+          <button
+            type="button"
+            onClick={() => {
+              setClienteId("");
+              setMarcados(new Set());
+            }}
+            aria-label={`Quitar ${clienteElegido.nombre} y volver a buscar`}
+            className="flex size-6 items-center justify-center rounded-full transition-colors hover:bg-acento/15 focus-visible:outline-2 focus-visible:outline-acento"
+          >
+            ✕
+          </button>
+        </span>
+      )}
 
       {clienteElegido && (
         <fieldset className="mt-3">
