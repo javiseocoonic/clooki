@@ -43,3 +43,6 @@ next-env.d.ts
 
 # Credenciales iniciales de usuarios (contiene DNI)
 scripts/usuarios.csv
+
+# Config local de Claude Code (rutas absolutas de cada máquina)
+.claude/
