@@ -51,6 +51,13 @@ empleados: sin cuotas ni objetivos de horas.
 - **PWA/instalable** y **notificaciones externas**: descartadas en el brief
   (§13.4, §14.4).
 
+## Fase Tareas (propuesta jul 2026)
+
+Tablero de tarjetas tipo Trello (columna por cliente, tarjeta = proyecto +
+título + persona asignada) conectado a Mi semana vía el botón «Mis tareas»,
+que convierte una tarjeta en línea de la rejilla de un clic. Planteamiento
+completo, decisiones y fases en [`roadmap-tareas.md`](./roadmap-tareas.md).
+
 ## Fase 2 clásica (sin fecha, tras la fase IA)
 
 Costes por hora y tarifas → rentabilidad real por cliente (el esquema ya
