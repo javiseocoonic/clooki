@@ -16,6 +16,33 @@ function etiquetaFecha(iso: string): string {
   return `${NOMBRES_DIA[(d.getDay() + 6) % 7]} ${d.getDate()}/${d.getMonth() + 1}`;
 }
 
+/** Con prefers-reduced-motion deja de girar; el texto que acompaña da el estado. */
+function Spinner() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      fill="none"
+      className="size-3.5 shrink-0 animate-spin"
+    >
+      <circle
+        cx="8"
+        cy="8"
+        r="6.5"
+        stroke="currentColor"
+        strokeOpacity="0.25"
+        strokeWidth="2"
+      />
+      <path
+        d="M8 1.5a6.5 6.5 0 0 1 6.5 6.5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 /** Entrada por lenguaje natural (fase IA·3): la IA propone, tú confirmas. */
 export function EntradaNatural({ alAplicar }: Props) {
   const [texto, setTexto] = useState("");
@@ -85,7 +112,14 @@ export function EntradaNatural({ alAplicar }: Props) {
           disabled={cargando || texto.trim().length < 3}
           className="h-10 shrink-0 rounded-lg border border-borde-fuerte px-3 text-sm font-medium text-texto transition-colors hover:border-acento hover:text-acento focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
         >
-          {cargando ? "Interpretando…" : "Proponer"}
+          {cargando ? (
+            <span className="flex items-center gap-1.5">
+              <Spinner />
+              Interpretando…
+            </span>
+          ) : (
+            "Proponer"
+          )}
         </button>
       </form>
 
