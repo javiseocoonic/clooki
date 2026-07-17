@@ -1,8 +1,13 @@
 import type { NextRequest } from "next/server";
 import { cargarAdmin, cargarHorasRango } from "@/lib/datos/admin";
-import { esFechaIso, formatearHoras } from "@/lib/semana";
+import {
+  esFechaIso,
+  formatearDuracion,
+  formatearHorasDecimal,
+} from "@/lib/semana";
 
-// Export CSV del detalle (persona, cliente, proyecto, fecha, horas, nota).
+// Export CSV del detalle (persona, cliente, proyecto, tarea, fecha,
+// duracion h:mm:ss y horas decimales para cálculos en Excel).
 // Separador ; y BOM para que Excel en español lo abra directamente.
 export async function GET(request: NextRequest) {
   const datos = await cargarAdmin();
@@ -21,7 +26,7 @@ export async function GET(request: NextRequest) {
 
   const campo = (v: string) => `"${v.replaceAll('"', '""')}"`;
   const lineas = [
-    "persona;cliente;proyecto;fecha;horas;nota",
+    "persona;cliente;proyecto;tarea;fecha;duracion;horas",
     ...horas.map((h) => {
       const proyecto = proyectosPorId.get(h.proyecto_id);
       const cliente = proyecto ? clientesPorId.get(proyecto.cliente_id) : null;
@@ -29,9 +34,10 @@ export async function GET(request: NextRequest) {
         campo(personasPorId.get(h.persona_id)?.nombre ?? ""),
         campo(cliente?.nombre ?? ""),
         campo(proyecto?.nombre ?? ""),
+        campo(h.tarea),
         h.fecha,
-        formatearHoras(h.horas),
-        campo(h.nota ?? ""),
+        formatearDuracion(h.segundos),
+        formatearHorasDecimal(h.segundos),
       ].join(";");
     }),
   ];

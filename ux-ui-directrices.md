@@ -1021,3 +1021,50 @@ Especificación que el Resumen admin debe cumplir cuando se construya:
 - **Aprobaciones de partes y bloqueo de semanas pasadas** — burocratiza sin mejorar la exactitud (fase 2
   si algún día hace falta).
 - **Notificaciones externas** (email/push) — siguen excluidas; el aviso de 14.1 vive dentro de la app.
+---
+
+## 15) Decisiones de julio 2026 — tiempo exacto, tarea por línea y papelera (encargo del cliente)
+
+Estas decisiones **levantan** varias restricciones anteriores de este documento. Donde §§1–14
+contradigan este bloque, manda §15.
+
+### 15.1 Tiempo exacto al segundo (sustituye los pasos de 0,25)
+- El modelo de datos pasa de `horas numeric` en pasos de 0,25 a **`segundos integer`** (migración 006).
+  `horas` sobrevive como columna generada de solo lectura (compat de lectores y CSV decimal).
+- Donde el documento diga "pasos de 0,25" o "redondeo a 0,25", léase **tiempo exacto al segundo**:
+  el cronómetro vuelca la duración real (sin mínimo de 0,25) y la entrada manual acepta cualquier
+  duración («1,5», «1:30», «1:30:45», «45m»).
+- **Formato único de presentación: `h:mm:ss`** en celdas, totales, bandeja de cronómetros y Resumen.
+  El CSV exporta `duracion` (h:mm:ss) y `horas` (decimal con coma, para cálculos en Excel).
+- Los steppers móviles (§13.3) pasan de ±0,25 h a **±15 min** (mismo gesto, unidad nueva).
+- El ticker de cronómetros pasa de 30 s a **1 s**, solo mientras haya sesiones activas.
+
+### 15.2 Tarea por línea (sustituye a la nota de §4.6)
+- La celda pasa a identificarse por **persona + proyecto + fecha + `tarea`** (`tarea text not null
+  default ''`, máx. 120, recortada). Una persona puede tener varias líneas del mismo proyecto con
+  tareas distintas (y una sin tarea), cada una con sus horas y su cronómetro.
+- **La tarea sustituye a la nota**: el botón bocadillo desaparece; las notas existentes se migraron
+  como tarea de su línea (006). La entrada por IA y el MCP proponen/aceptan `tarea` (el MCP conserva
+  `nota` como alias de entrada).
+- La tarea se muestra **bajo el nombre del proyecto** en la fila (escritorio y móvil) y se edita con
+  el lápiz de la fila (renombra las celdas de la semana visible; colisión con otra línea → rechazo;
+  bloqueado con cronómetro en marcha).
+- Al añadir línea: cliente → proyectos → **campo "Tarea (opcional)"**. Ya no se excluyen proyectos
+  presentes: solo se rechaza el par exacto proyecto+tarea repetido.
+- Cronómetros: máximo una sesión activa por persona+proyecto+**tarea** (antes: por proyecto).
+
+### 15.3 Papelera por fila (sustituye la regla "quitar línea solo sin horas" de §4.6)
+- Cada fila lleva **papelera** (antes: aspa solo con la línea vacía). Línea vacía → se quita en
+  memoria como antes, sin confirmar. Línea con horas → **confirmación inline** en banda de error
+  («Se borrarán {h:mm:ss} de {n} días de esta semana. [Borrar] [Cancelar]») y borrado real de las
+  celdas de esa línea en la semana visible. Otras semanas no se tocan.
+- Con cronómetro en marcha la papelera no aparece (parar antes de borrar; prevención de pérdida).
+- El rojo del botón Borrar es semántica de **acción destructiva** — coherente con §6/D10, no lo
+  contradice.
+
+### 15.4 Microcopys que cambian
+- Tooltip de celda inválida: «Escribe horas («1,5»), reloj («1:30» o «1:30:45») o minutos («45m»).
+  Máximo 24 h.»
+- Cronómetro parado: «Se han sumado {h:mm:ss} al {fecha}.» / «Cronómetro descartado: no se ha sumado
+  tiempo.» (desaparece «Menos de 0,25 h…»).
+- Reclamo de sesión antigua: el campo acepta y sugiere `h:mm:ss` exacto.

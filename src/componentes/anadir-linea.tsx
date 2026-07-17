@@ -2,35 +2,36 @@
 
 import { useState } from "react";
 import type { Cliente, Proyecto } from "@/lib/tipos";
-import type { ProyectoConCliente } from "@/lib/datos/mi-semana";
+import type { LineaSemana } from "@/lib/datos/mi-semana";
+import { idLinea, limpiarTarea } from "@/lib/semana";
 import { BuscadorCliente } from "./buscador-cliente";
 
 interface Props {
   clientes: (Cliente & { proyectos: Proyecto[] })[];
   /** Ids de clientes con horas recientes del usuario, más reciente primero. */
   clientesRecientes: string[];
-  /** Proyectos ya presentes en la rejilla (no se ofrecen de nuevo). */
-  idsExcluidos: string[];
-  alAnadir: (lineas: ProyectoConCliente[]) => void;
+  /**
+   * Claves (idLinea) de las líneas ya visibles en la rejilla. Un proyecto
+   * puede repetirse con otra tarea; solo se rechaza el par exacto.
+   */
+  clavesExistentes: string[];
+  alAnadir: (lineas: LineaSemana[]) => void;
 }
 
 export function AnadirLinea({
   clientes,
   clientesRecientes,
-  idsExcluidos,
+  clavesExistentes,
   alAnadir,
 }: Props) {
   const [abierto, setAbierto] = useState(false);
   const [clienteId, setClienteId] = useState("");
   const [marcados, setMarcados] = useState<Set<string>>(new Set());
+  const [tarea, setTarea] = useState("");
+  const [aviso, setAviso] = useState<string | null>(null);
 
-  const excluidos = new Set(idsExcluidos);
-  const clientesConOpciones = clientes
-    .map((c) => ({
-      ...c,
-      proyectos: c.proyectos.filter((p) => !excluidos.has(p.id)),
-    }))
-    .filter((c) => c.proyectos.length > 0);
+  const existentes = new Set(clavesExistentes);
+  const clientesConOpciones = clientes.filter((c) => c.proyectos.length > 0);
 
   const clienteElegido = clientesConOpciones.find((c) => c.id === clienteId);
   const n = marcados.size;
@@ -39,9 +40,12 @@ export function AnadirLinea({
     setAbierto(false);
     setClienteId("");
     setMarcados(new Set());
+    setTarea("");
+    setAviso(null);
   }
 
   function alternar(proyectoId: string) {
+    setAviso(null);
     setMarcados((prev) => {
       const s = new Set(prev);
       if (s.has(proyectoId)) s.delete(proyectoId);
@@ -57,9 +61,19 @@ export function AnadirLinea({
       nombre: clienteElegido.nombre,
       activo: clienteElegido.activo,
     };
-    const nuevas = clienteElegido.proyectos
-      .filter((p) => marcados.has(p.id))
-      .map((p) => ({ ...p, cliente }));
+    const tareaLimpia = limpiarTarea(tarea);
+    const elegidos = clienteElegido.proyectos.filter((p) => marcados.has(p.id));
+    const nuevas: LineaSemana[] = elegidos
+      .filter((p) => !existentes.has(idLinea(p.id, tareaLimpia)))
+      .map((p) => ({ ...p, cliente, tarea: tareaLimpia }));
+    if (nuevas.length === 0) {
+      setAviso(
+        tareaLimpia
+          ? "Ya tienes esa línea con esa tarea en la semana."
+          : "Ya tienes esa línea en la semana. Escribe una tarea para diferenciarla.",
+      );
+      return;
+    }
     alAnadir(nuevas);
     cerrar();
   }
@@ -72,7 +86,7 @@ export function AnadirLinea({
         disabled={clientesConOpciones.length === 0}
         title={
           clientesConOpciones.length === 0
-            ? "Ya tienes todas tus líneas"
+            ? "No hay proyectos activos"
             : undefined
         }
         className="rounded-lg border border-borde-fuerte px-3 py-2 text-sm font-medium text-texto transition-colors hover:border-acento hover:text-acento focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
@@ -101,6 +115,7 @@ export function AnadirLinea({
           alElegir={(id) => {
             setClienteId(id);
             setMarcados(new Set());
+            setAviso(null);
           }}
         />
       ) : (
@@ -111,6 +126,7 @@ export function AnadirLinea({
             onClick={() => {
               setClienteId("");
               setMarcados(new Set());
+              setAviso(null);
             }}
             aria-label={`Quitar ${clienteElegido.nombre} y volver a buscar`}
             className="flex size-6 items-center justify-center rounded-full transition-colors hover:bg-acento/15 focus-visible:outline-2 focus-visible:outline-acento"
@@ -144,7 +160,32 @@ export function AnadirLinea({
           <p aria-live="polite" className="sr-only">
             {n} proyectos seleccionados
           </p>
+
+          <label
+            htmlFor="tarea-linea"
+            className="mb-1.5 mt-3 block text-xs font-medium text-texto-suave"
+          >
+            Tarea (opcional) — en qué vas a trabajar
+          </label>
+          <input
+            id="tarea-linea"
+            type="text"
+            value={tarea}
+            onChange={(e) => {
+              setTarea(e.target.value);
+              setAviso(null);
+            }}
+            maxLength={120}
+            placeholder="p. ej. Ficha de académicos"
+            className="h-10 w-full rounded-lg border border-borde bg-superficie px-3 text-sm text-tinta outline-none placeholder:text-texto-suave focus:border-acento focus:ring-2 focus:ring-acento/20"
+          />
         </fieldset>
+      )}
+
+      {aviso && (
+        <p role="alert" className="mt-2 text-xs text-aviso">
+          {aviso}
+        </p>
       )}
 
       <div className="mt-3 flex items-center gap-2">

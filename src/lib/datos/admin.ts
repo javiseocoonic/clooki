@@ -14,8 +14,8 @@ export interface FilaHoras {
   persona_id: string;
   proyecto_id: string;
   fecha: string;
-  horas: number;
-  nota: string | null;
+  tarea: string;
+  segundos: number;
   actualizado_en: string;
 }
 
@@ -76,7 +76,7 @@ export async function cargarHorasRango(
   const supabase = await crearClienteServidor();
   const { data } = await supabase
     .from("horas")
-    .select("persona_id, proyecto_id, fecha, horas, nota, actualizado_en")
+    .select("persona_id, proyecto_id, fecha, tarea, segundos, actualizado_en")
     .gte("fecha", desde)
     .lte("fecha", hasta)
     .order("fecha")

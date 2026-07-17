@@ -8,19 +8,26 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { crearClienteServidor } from "@/lib/supabase/servidor";
-import { esFechaIso, redondearAPaso } from "@/lib/semana";
+import {
+  SEGUNDOS_DIA,
+  aIso,
+  deIso,
+  esFechaIso,
+  limpiarTarea,
+} from "@/lib/semana";
 
 export interface PropuestaHoras {
   proyecto_id: string;
   cliente: string;
   proyecto: string;
+  /** Identidad de la línea; "" = sin tarea */
+  tarea: string;
   /** YYYY-MM-DD */
   fecha: string;
-  /** Pasos de 0,25, (0, 24] */
-  horas: number;
+  /** Duración exacta, (0, 86400] */
+  segundos: number;
   /** true = sumar sobre lo existente; false = fijar la celda */
   sumar: boolean;
-  nota: string | null;
 }
 
 export interface ResultadoInterpretacion {
@@ -39,9 +46,13 @@ const ESQUEMA_SALIDA = {
         properties: {
           proyecto_id: { type: "string" },
           fecha: { type: "string", description: "YYYY-MM-DD" },
-          horas: { type: "number" },
+          horas: { type: "number", description: "Horas decimales, p. ej. 1.5" },
           sumar: { type: "boolean" },
-          nota: { type: "string" },
+          tarea: {
+            type: "string",
+            description:
+              "Tarea concreta dentro del proyecto; cadena vacía si no se menciona",
+          },
         },
         required: ["proyecto_id", "fecha", "horas", "sumar"],
         additionalProperties: false,
@@ -94,9 +105,20 @@ export async function interpretarFrase(
     return { propuestas: [], avisos: [], error: "Sesión caducada. Vuelve a entrar." };
   }
 
-  const [clientesRes, proyectosRes] = await Promise.all([
+  const { fecha: hoy, diaSemana } = hoyMadrid();
+  // Tareas usadas en las últimas dos semanas: contexto para que el modelo
+  // case "diseño" con la tarea existente en vez de inventar una variante.
+  const desdeTareas = aIso(
+    new Date(deIso(hoy).getTime() - 14 * 86400000),
+  );
+  const [clientesRes, proyectosRes, tareasRes] = await Promise.all([
     supabase.from("clientes").select("id, nombre").eq("activo", true),
     supabase.from("proyectos").select("id, cliente_id, nombre").eq("activo", true),
+    supabase
+      .from("horas")
+      .select("proyecto_id, tarea")
+      .neq("tarea", "")
+      .gte("fecha", desdeTareas),
   ]);
   const clientesPorId = new Map(
     (clientesRes.data ?? []).map((c) => [c.id, c.nombre]),
@@ -111,7 +133,16 @@ export async function interpretarFrase(
   const catalogo = proyectos
     .map((p) => `${p.id} | ${clientesPorId.get(p.cliente_id)} — ${p.nombre}`)
     .join("\n");
-  const { fecha: hoy, diaSemana } = hoyMadrid();
+  const idsProyectos = new Set(proyectos.map((p) => p.id));
+  const tareasExistentes = [
+    ...new Set(
+      (tareasRes.data ?? [])
+        .filter((t) => idsProyectos.has(t.proyecto_id))
+        .map((t) => `${t.proyecto_id} | ${t.tarea}`),
+    ),
+  ]
+    .slice(0, 80)
+    .join("\n");
 
   const sistema = `Eres el intérprete de partes de horas de Clooki (agencia Coonic).
 Convierte la frase del usuario en propuestas de registro de horas.
@@ -121,18 +152,25 @@ Hoy es ${diaSemana} ${hoy} (zona Europe/Madrid).
 CATÁLOGO (proyecto_id | Cliente — Proyecto). Usa EXACTAMENTE estos ids:
 ${catalogo}
 
+TAREAS EXISTENTES (proyecto_id | tarea) de las últimas dos semanas:
+${tareasExistentes || "(ninguna)"}
+
 REGLAS:
 - Fechas: resuelve expresiones relativas a hoy ("hoy", "ayer", "anteayer",
   "el lunes" = el más reciente pasado o hoy). Sin mención de fecha → hoy.
-- Horas en pasos de 0,25: "media hora"=0.5, "hora y media"=1.5, "1:30"=1.5,
-  "un cuarto de hora"=0.25. Acepta coma decimal.
+- horas: decimales, sin redondeos: "media hora"=0.5, "hora y media"=1.5,
+  "1:30"=1.5, "20 minutos"=0.333. Acepta coma decimal. El tiempo se guarda
+  exacto al segundo.
+- tarea: si el usuario describe la tarea concreta dentro del proyecto,
+  cásala (aproximada, insensible a acentos) con las TAREAS EXISTENTES de
+  ese proyecto y usa el texto EXACTO de la existente; si ninguna encaja,
+  propón el texto del usuario tal cual; si no menciona tarea, déjala vacía.
 - Nombres de cliente/proyecto aproximados e insensibles a acentos. Si un
   nombre encaja con varios candidatos o con ninguno, NO propongas esa parte:
   añade un aviso breve explicándolo (con los candidatos si los hay).
 - sumar=true solo si el usuario dice añadir/sumar/más sobre lo que ya hay;
   en caso contrario sumar=false (fijar el valor de la celda).
-- nota: solo si el usuario describe la tarea concreta.
-- Nunca inventes clientes, proyectos ni cantidades no mencionadas.`;
+- Nunca inventes clientes, proyectos, tareas ni cantidades no mencionadas.`;
 
   const anthropic = new Anthropic();
   let bruto: unknown;
@@ -174,7 +212,7 @@ REGLAS:
       fecha?: string;
       horas?: number;
       sumar?: boolean;
-      nota?: string;
+      tarea?: string;
     }[];
     avisos?: string[];
   } | null;
@@ -198,8 +236,12 @@ REGLAS:
       avisos.push(`Se descartó ${proyecto.nombre}: la fecha ${p.fecha} está demasiado lejos.`);
       continue;
     }
-    const horas = redondearAPaso(Number(p.horas));
-    if (!Number.isFinite(horas) || horas <= 0 || horas > 24) {
+    const segundos = Math.round(Number(p.horas) * 3600);
+    if (
+      !Number.isFinite(segundos) ||
+      segundos <= 0 ||
+      segundos > SEGUNDOS_DIA
+    ) {
       avisos.push(`Se descartó ${proyecto.nombre}: horas fuera de rango.`);
       continue;
     }
@@ -207,10 +249,10 @@ REGLAS:
       proyecto_id: proyecto.id,
       cliente: clientesPorId.get(proyecto.cliente_id) ?? "",
       proyecto: proyecto.nombre,
+      tarea: limpiarTarea(typeof p.tarea === "string" ? p.tarea : ""),
       fecha: p.fecha,
-      horas,
+      segundos,
       sumar: p.sumar === true,
-      nota: typeof p.nota === "string" && p.nota.trim() ? p.nota.trim() : null,
     });
     if (propuestas.length >= 12) break;
   }

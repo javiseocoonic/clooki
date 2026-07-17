@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { formatearHoras, deIso, aIso } from "@/lib/semana";
+import { formatearDuracion, deIso, aIso } from "@/lib/semana";
 import type { Database, FilaHorasMcp } from "@/lib/tipos";
 
 // ============================================================
@@ -78,15 +78,15 @@ const HERRAMIENTAS = [
   {
     name: "apuntar_horas",
     description:
-      "Apunta horas del usuario autenticado a un proyecto de un cliente. Pasos de 0,25 h. Por defecto FIJA el valor de la celda (persona+proyecto+día); con sumar=true acumula sobre lo que hubiera. horas=0 (sin sumar) borra la celda.",
+      "Apunta horas del usuario autenticado a un proyecto de un cliente, con tarea opcional. Horas decimales sin redondeo (se guardan al segundo). La celda es persona+proyecto+tarea+día: el mismo proyecto puede tener varias tareas el mismo día. Por defecto FIJA el valor de la celda; con sumar=true acumula sobre lo que hubiera. horas=0 (sin sumar) borra la celda de esa tarea (sin tarea, la celda sin tarea).",
     inputSchema: {
       type: "object",
       properties: {
         cliente: { type: "string", description: "Nombre (o parte) del cliente" },
-        proyecto: { type: "string", description: "Nombre (o parte) del proyecto/tarea" },
-        horas: { type: "number", description: "Horas en pasos de 0,25 (0 borra la celda)" },
+        proyecto: { type: "string", description: "Nombre (o parte) del proyecto" },
+        horas: { type: "number", description: "Horas decimales, p. ej. 1.75 (0 borra la celda)" },
         fecha: { type: "string", description: "YYYY-MM-DD; por defecto hoy (Madrid)" },
-        nota: { type: "string", description: "Nota opcional de la línea" },
+        tarea: { type: "string", description: "Tarea concreta dentro del proyecto (opcional; identifica la línea)" },
         sumar: { type: "boolean", description: "true = añadir sobre el valor existente" },
       },
       required: ["cliente", "proyecto", "horas"],
@@ -191,19 +191,29 @@ async function ejecutarHerramienta(
         `Varios proyectos coinciden en ${cliente.nombre}: ${proyectos.map((p) => p.nombre).join(", ")}. Sé más específico.`,
       );
 
+    // `nota` se acepta como alias legado de `tarea` (conectores antiguos).
+    const tarea =
+      typeof args.tarea === "string"
+        ? args.tarea
+        : typeof args.nota === "string"
+          ? args.nota
+          : null;
     const { data, error: errorApuntar } = await supabase.rpc("mcp_apuntar", {
       p_clave: clave,
       p_proyecto_id: proyectos[0].id,
       p_fecha: fecha,
       p_horas: horas,
-      p_nota: typeof args.nota === "string" ? args.nota : null,
+      p_tarea: tarea,
       p_sumar: args.sumar === true,
     });
     if (errorApuntar) throw new ErrorHerramienta(errorApuntar.message);
 
+    const etiqueta =
+      `${cliente.nombre} — ${proyectos[0].nombre}` +
+      (tarea?.trim() ? ` · ${tarea.trim()}` : "");
     if (data.accion === "borrado")
-      return `Celda borrada: ${cliente.nombre} — ${proyectos[0].nombre}, ${fecha}.`;
-    return `${data.accion === "sumado" ? "Sumadas" : "Apuntadas"} ${formatearHoras(horas)} h a ${cliente.nombre} — ${proyectos[0].nombre} el ${fecha}. Total de esa celda: ${formatearHoras(data.total)} h.`;
+      return `Celda borrada: ${etiqueta}, ${fecha}.`;
+    return `${data.accion === "sumado" ? "Sumado" : "Apuntado"} ${formatearDuracion(Math.round(horas * 3600))} a ${etiqueta} el ${fecha}. Total de esa celda: ${formatearDuracion(data.segundos_total)}.`;
   }
 
   if (nombre === "mis_horas") {
@@ -228,16 +238,19 @@ async function ejecutarHerramienta(
     let total = 0;
     const detalle = filas
       .map((f) => {
-        porCliente.set(f.cliente, (porCliente.get(f.cliente) ?? 0) + f.horas);
-        total += f.horas;
-        return `${f.fecha}  ${formatearHoras(f.horas).padStart(5)} h  ${f.cliente} — ${f.proyecto}${f.nota ? ` (${f.nota})` : ""}`;
+        porCliente.set(
+          f.cliente,
+          (porCliente.get(f.cliente) ?? 0) + f.segundos,
+        );
+        total += f.segundos;
+        return `${f.fecha}  ${formatearDuracion(f.segundos).padStart(8)}  ${f.cliente} — ${f.proyecto}${f.tarea ? ` · ${f.tarea}` : ""}`;
       })
       .join("\n");
     const totales = [...porCliente.entries()]
       .sort((a, b) => b[1] - a[1])
-      .map(([c, h]) => `  ${c}: ${formatearHoras(h)} h`)
+      .map(([c, s]) => `  ${c}: ${formatearDuracion(s)}`)
       .join("\n");
-    return `Horas de ${desde} a ${hasta}:\n\n${detalle}\n\nPor cliente:\n${totales}\n\nTotal: ${formatearHoras(total)} h`;
+    return `Horas de ${desde} a ${hasta}:\n\n${detalle}\n\nPor cliente:\n${totales}\n\nTotal: ${formatearDuracion(total)}`;
   }
 
   if (nombre === "resumen_horas") {
@@ -266,23 +279,23 @@ async function ejecutarHerramienta(
     const porPersona = new Map<string, { total: number; fechas: Set<string> }>();
     let interno = 0;
     let puntuales = 0;
-    let totalHoras = 0;
+    let totalSegundos = 0;
     for (const f of filas) {
-      totalHoras += f.horas;
+      totalSegundos += f.segundos;
       const registrado = deIso(f.actualizado_en.slice(0, 10)).getTime();
       if (registrado - deIso(f.fecha).getTime() <= 86400000 * 1.5)
-        puntuales += f.horas;
+        puntuales += f.segundos;
       const p = porPersona.get(f.persona_id) ?? { total: 0, fechas: new Set<string>() };
-      p.total += f.horas;
+      p.total += f.segundos;
       p.fechas.add(f.fecha);
       porPersona.set(f.persona_id, p);
       if (f.cliente === CLIENTE_INTERNO) {
-        interno += f.horas;
+        interno += f.segundos;
         if (!incluirInterno) continue;
       }
       const c = porCliente.get(f.cliente) ?? { total: 0, proyectos: new Map<string, number>() };
-      c.total += f.horas;
-      c.proyectos.set(f.proyecto, (c.proyectos.get(f.proyecto) ?? 0) + f.horas);
+      c.total += f.segundos;
+      c.proyectos.set(f.proyecto, (c.proyectos.get(f.proyecto) ?? 0) + f.segundos);
       porCliente.set(f.cliente, c);
     }
 
@@ -293,9 +306,9 @@ async function ejecutarHerramienta(
         const pct = totalMostrado > 0 ? Math.round((c.total / totalMostrado) * 100) : 0;
         const proyectos = [...c.proyectos.entries()]
           .sort((a, b) => b[1] - a[1])
-          .map(([p, h]) => `    ${p}: ${formatearHoras(h)} h`)
+          .map(([p, s]) => `    ${p}: ${formatearDuracion(s)}`)
           .join("\n");
-        return `  ${nombre}: ${formatearHoras(c.total)} h (${pct} %)\n${proyectos}`;
+        return `  ${nombre}: ${formatearDuracion(c.total)} (${pct} %)\n${proyectos}`;
       })
       .join("\n");
 
@@ -313,20 +326,20 @@ async function ejecutarHerramienta(
       .sort((a, b) => b.total - a.total)
       .map(
         (p) =>
-          `  ${p.nombre}: ${formatearHoras(p.total)} h` +
+          `  ${p.nombre}: ${formatearDuracion(p.total)}` +
           (p.sinRegistro > 0 ? ` · ${p.sinRegistro} día(s) sin registro` : ""),
       )
       .join("\n");
 
     const fiabilidad =
-      totalHoras > 0 ? Math.round((puntuales / totalHoras) * 100) : null;
+      totalSegundos > 0 ? Math.round((puntuales / totalSegundos) * 100) : null;
 
     return (
       `Resumen ${desde} → ${hasta}\n\n` +
-      `Por cliente${incluirInterno ? " (interno incluido)" : ""}: ${formatearHoras(totalMostrado)} h\n${clientesTexto || "  (sin horas)"}\n` +
+      `Por cliente${incluirInterno ? " (interno incluido)" : ""}: ${formatearDuracion(totalMostrado)}\n${clientesTexto || "  (sin horas)"}\n` +
       (incluirInterno
         ? ""
-        : `\n${CLIENTE_INTERNO}: ${formatearHoras(interno)} h (fuera del análisis)\n`) +
+        : `\n${CLIENTE_INTERNO}: ${formatearDuracion(interno)} (fuera del análisis)\n`) +
       `\nPor persona (días sin registro = L–V a cero hasta hoy; señal de dato incompleto, no de jornada):\n${personasTexto || "  (sin personas)"}\n` +
       (fiabilidad !== null
         ? `\nFiabilidad: ${fiabilidad}% de las horas se apuntaron el mismo día o el siguiente.`
@@ -410,10 +423,12 @@ export async function POST(request: NextRequest) {
         version: "1.0.0",
       },
       instructions:
-        "Registro de horas interno de Coonic. Las horas van en pasos de 0,25. " +
+        "Registro de horas interno de Coonic. El tiempo se guarda exacto al " +
+        "segundo (horas decimales, sin redondeos). " +
         "Usa listar_catalogo para resolver nombres de clientes/proyectos. " +
-        "apuntar_horas FIJA la celda (persona+proyecto+día) salvo sumar=true. " +
-        "resumen_horas es solo para admins.",
+        "La celda es persona+proyecto+tarea+día: la tarea (opcional) permite " +
+        "varias líneas del mismo proyecto. apuntar_horas FIJA la celda salvo " +
+        "sumar=true. resumen_horas es solo para admins.",
     });
   }
 

@@ -31,9 +31,12 @@ export type RegistroHoras = {
   proyecto_id: string;
   /** Fecha en formato ISO `YYYY-MM-DD` */
   fecha: string;
-  /** Pasos de 0,5; > 0 y <= 24 */
+  /** Parte de la identidad de la línea; "" = sin tarea. Recortada, máx. 120. */
+  tarea: string;
+  /** Duración exacta en segundos; > 0 y <= 86400 */
+  segundos: number;
+  /** Columna GENERADA (segundos/3600). Solo lectura: nunca en escrituras. */
   horas: number;
-  nota: string | null;
   actualizado_en: string;
 }
 
@@ -41,12 +44,14 @@ export type SesionCronometro = {
   id: string;
   persona_id: string;
   proyecto_id: string;
+  /** Misma semántica que en `horas`: "" = sin tarea. */
+  tarea: string;
   /** timestamptz ISO */
   inicio: string;
   /** `YYYY-MM-DD` local del usuario al arrancar */
   dia_atribuido: string;
   fin: string | null;
-  horas_volcadas: number | null;
+  segundos_volcados: number | null;
 }
 
 export type ClaveApi = {
@@ -65,8 +70,9 @@ export type FilaHorasMcp = {
   cliente: string;
   proyecto: string;
   fecha: string;
+  tarea: string;
+  segundos: number;
   horas: number;
-  nota: string | null;
   actualizado_en: string;
 }
 
@@ -95,17 +101,18 @@ export type Database = {
         Relationships: [];
       };
       horas: {
+        // `horas` es columna generada: fuera de Insert/Update a propósito.
         Row: RegistroHoras;
-        Insert: Omit<RegistroHoras, "id" | "nota" | "actualizado_en"> &
-          Partial<Pick<RegistroHoras, "id" | "nota">>;
-        Update: Partial<Omit<RegistroHoras, "id">>;
+        Insert: Omit<RegistroHoras, "id" | "horas" | "actualizado_en"> &
+          Partial<Pick<RegistroHoras, "id">>;
+        Update: Partial<Omit<RegistroHoras, "id" | "horas">>;
         Relationships: [];
       };
       cronometros: {
         Row: SesionCronometro;
         Insert: Pick<
           SesionCronometro,
-          "persona_id" | "proyecto_id" | "dia_atribuido"
+          "persona_id" | "proyecto_id" | "dia_atribuido" | "tarea"
         > &
           Partial<SesionCronometro>;
         Update: Partial<Omit<SesionCronometro, "id">>;
@@ -123,8 +130,13 @@ export type Database = {
       persona_actual_id: { Args: Record<string, never>; Returns: string | null };
       es_admin: { Args: Record<string, never>; Returns: boolean };
       parar_cronometro: {
-        Args: { p_id: string; p_horas?: number | null };
-        Returns: { volcado: number; total: number };
+        Args: { p_id: string; p_horas?: number | null; p_segundos?: number | null };
+        Returns: {
+          segundos_volcados: number;
+          segundos_total: number;
+          volcado: number;
+          total: number;
+        };
       };
       mcp_persona: {
         Args: { p_clave: string };
@@ -154,8 +166,9 @@ export type Database = {
           p_horas: number;
           p_nota?: string | null;
           p_sumar?: boolean;
+          p_tarea?: string | null;
         };
-        Returns: { accion: string; total: number };
+        Returns: { accion: string; segundos_total: number; total: number };
       };
     };
     Enums: { rol_persona: Rol };

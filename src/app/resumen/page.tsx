@@ -6,7 +6,7 @@ import {
   cargarAdmin,
   cargarHorasRango,
 } from "@/lib/datos/admin";
-import { deIso, formatearHoras } from "@/lib/semana";
+import { deIso, formatearDuracion } from "@/lib/semana";
 import { Cabecera } from "@/componentes/cabecera";
 import {
   BandejaCronometros,
@@ -52,16 +52,16 @@ export default async function PaginaResumen({
     const cliente = proyecto && clientesPorId.get(proyecto.cliente_id);
     if (!proyecto || !cliente) continue;
     const esInterno = cliente.nombre === CLIENTE_INTERNO;
-    if (esInterno) totalInterno += h.horas;
+    if (esInterno) totalInterno += h.segundos;
     if (esInterno && !incluirInterno) continue;
     const agg = porCliente.get(cliente.id) ?? {
       total: 0,
       porProyecto: new Map<string, number>(),
     };
-    agg.total += h.horas;
+    agg.total += h.segundos;
     agg.porProyecto.set(
       proyecto.id,
-      (agg.porProyecto.get(proyecto.id) ?? 0) + h.horas,
+      (agg.porProyecto.get(proyecto.id) ?? 0) + h.segundos,
     );
     porCliente.set(cliente.id, agg);
   }
@@ -78,7 +78,7 @@ export default async function PaginaResumen({
       total: 0,
       fechas: new Set<string>(),
     };
-    agg.total += h.horas;
+    agg.total += h.segundos;
     agg.fechas.add(h.fecha);
     porPersona.set(h.persona_id, agg);
   }
@@ -97,10 +97,10 @@ export default async function PaginaResumen({
   let horasPuntuales = 0;
   let horasTotales = 0;
   for (const h of horas) {
-    horasTotales += h.horas;
+    horasTotales += h.segundos;
     const registrado = deIso(h.actualizado_en.slice(0, 10)).getTime();
     const trabajado = deIso(h.fecha).getTime();
-    if (registrado - trabajado <= 86400000 * 1.5) horasPuntuales += h.horas;
+    if (registrado - trabajado <= 86400000 * 1.5) horasPuntuales += h.segundos;
   }
   const fiabilidad =
     horasTotales > 0 ? Math.round((horasPuntuales / horasTotales) * 100) : null;
@@ -196,7 +196,7 @@ export default async function PaginaResumen({
                 Horas por cliente
               </h2>
               <span className="text-base font-bold tabular-nums text-tinta">
-                {totalMostrado > 0 ? `${formatearHoras(totalMostrado)} h` : "—"}
+                {totalMostrado > 0 ? formatearDuracion(totalMostrado) : "—"}
               </span>
             </div>
             {filasClientes.length === 0 ? (
@@ -231,7 +231,7 @@ export default async function PaginaResumen({
                             {pct} %
                           </span>
                           <span className="w-20 text-right text-sm font-semibold tabular-nums text-tinta">
-                            {formatearHoras(total)} h
+                            {formatearDuracion(total)}
                           </span>
                         </summary>
                         <ul className="mb-2 ml-6">
@@ -250,7 +250,7 @@ export default async function PaginaResumen({
                                   {proyecto?.nombre ?? "Proyecto"}
                                 </span>
                                 <span className="tabular-nums text-texto">
-                                  {formatearHoras(h)} h
+                                  {formatearDuracion(h)}
                                 </span>
                               </li>
                             ))}
@@ -271,7 +271,7 @@ export default async function PaginaResumen({
                 </>
               ) : (
                 <>
-                  {CLIENTE_INTERNO}: {formatearHoras(totalInterno)} h — fuera
+                  {CLIENTE_INTERNO}: {formatearDuracion(totalInterno)} — fuera
                   del análisis por cliente.{" "}
                   <Link href={`/resumen?r=${rango.tipo}${rango.tipo === "libre" ? `&desde=${rango.desde}&hasta=${rango.hasta}` : ""}&interno=1`} className="font-medium text-acento hover:underline">
                     Incluirlo
@@ -305,7 +305,7 @@ export default async function PaginaResumen({
                   <tr key={p.id} className="border-t border-borde">
                     <td className="py-2 text-tinta">{p.nombre}</td>
                     <td className="py-2 text-right font-medium tabular-nums text-tinta">
-                      {total > 0 ? formatearHoras(total) : <span className="font-normal text-texto-suave">—</span>}
+                      {total > 0 ? formatearDuracion(total) : <span className="font-normal text-texto-suave">—</span>}
                     </td>
                     <td className="py-2 text-right tabular-nums">
                       {sinRegistro > 0 ? (

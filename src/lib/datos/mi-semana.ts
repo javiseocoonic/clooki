@@ -1,5 +1,7 @@
 import { crearClienteServidor } from "@/lib/supabase/servidor";
-import { diasDeSemana, sumarSemanas } from "@/lib/semana";
+// idLinea vive en semana.ts (módulo neutro): este archivo importa código
+// solo-servidor y los componentes cliente no pueden tirar de él.
+import { diasDeSemana, idLinea, sumarSemanas } from "@/lib/semana";
 import type {
   Cliente,
   Persona,
@@ -15,15 +17,24 @@ export interface ProyectoConCliente extends Proyecto {
   cliente: Cliente;
 }
 
+/**
+ * Una línea de la rejilla: proyecto + tarea ("" = sin tarea). Puede haber
+ * varias líneas del mismo proyecto con tareas distintas.
+ */
+export interface LineaSemana extends ProyectoConCliente {
+  tarea: string;
+}
+
 export interface DatosMiSemana {
   persona: Persona;
   /** Clientes activos con sus proyectos activos, para "+ Añadir línea". */
   clientes: (Cliente & { proyectos: Proyecto[] })[];
   /**
-   * Líneas de la rejilla: proyectos con horas esta semana o en las últimas
-   * SEMANAS_RECORDADAS semanas, orden estable por cliente y proyecto.
+   * Líneas de la rejilla: pares proyecto+tarea con horas esta semana o en
+   * las últimas SEMANAS_RECORDADAS semanas, orden estable por cliente,
+   * proyecto y tarea (la línea sin tarea primero).
    */
-  lineas: ProyectoConCliente[];
+  lineas: LineaSemana[];
   /** Registros de la semana visible (celdas con valor). */
   horas: RegistroHoras[];
   /**
@@ -81,7 +92,7 @@ export async function cargarMiSemana(
         .lte("fecha", dias[6]),
       supabase
         .from("horas")
-        .select("proyecto_id, fecha")
+        .select("proyecto_id, fecha, tarea")
         .eq("persona_id", persona.id)
         .gte("fecha", desdeRecordado)
         .lt("fecha", dias[0]),
@@ -101,24 +112,30 @@ export async function cargarMiSemana(
   const clientesPorId = new Map(clientes.map((c) => [c.id, c]));
   const proyectosPorId = new Map(proyectos.map((p) => [p.id, p]));
 
-  // Líneas = proyectos con horas esta semana ∪ con horas recientes ∪ con
-  // cronómetro activo (una sesión en marcha aún no tiene horas volcadas,
-  // pero su línea debe verse al recargar — brief §11.3.e).
-  const idsLineas = new Set<string>([
-    ...horas.map((h) => h.proyecto_id),
-    ...recientes.map((r) => r.proyecto_id),
-    ...sesiones.map((s) => s.proyecto_id),
-  ]);
+  // Líneas = pares proyecto+tarea con horas esta semana ∪ con horas
+  // recientes ∪ con cronómetro activo (una sesión en marcha aún no tiene
+  // horas volcadas, pero su línea debe verse al recargar — brief §11.3.e).
+  const paresLinea = new Map<string, { proyectoId: string; tarea: string }>();
+  for (const f of [...horas, ...recientes, ...sesiones]) {
+    const proyectoId = f.proyecto_id;
+    const tarea = f.tarea;
+    paresLinea.set(idLinea(proyectoId, tarea), { proyectoId, tarea });
+  }
 
-  const lineas: ProyectoConCliente[] = [...idsLineas]
-    .map((id) => proyectosPorId.get(id))
-    .filter((p): p is Proyecto => Boolean(p))
-    .map((p) => ({ ...p, cliente: clientesPorId.get(p.cliente_id) }))
-    .filter((p): p is ProyectoConCliente => Boolean(p.cliente))
+  const lineas: LineaSemana[] = [...paresLinea.values()]
+    .map(({ proyectoId, tarea }) => {
+      const p = proyectosPorId.get(proyectoId);
+      if (!p) return null;
+      const cliente = clientesPorId.get(p.cliente_id);
+      if (!cliente) return null;
+      return { ...p, cliente, tarea };
+    })
+    .filter((l): l is LineaSemana => l !== null)
     .sort(
       (a, b) =>
         a.cliente.nombre.localeCompare(b.cliente.nombre, "es") ||
-        a.nombre.localeCompare(b.nombre, "es"),
+        a.nombre.localeCompare(b.nombre, "es") ||
+        a.tarea.localeCompare(b.tarea, "es"),
     );
 
   // Clientes recientes de la persona: última fecha con horas por cliente.

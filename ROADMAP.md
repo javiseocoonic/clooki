@@ -14,6 +14,7 @@ empleados: sin cuotas ni objetivos de horas.
 | 2. Rejilla "Mi semana" + pasada completa de UX (brief §1–14) | ✅ jul 2026 |
 | — Cronómetro concurrente, pegado, líneas múltiples, 0,25, aviso semana incompleta | ✅ jul 2026 |
 | 3. Resumen + Gestión (admin) | ✅ jul 2026 |
+| — Tiempo exacto al segundo (h:mm:ss), tarea por línea, papelera (migración 006) | ✅ jul 2026 |
 | 4. Pulido con uso real | ⬜ |
 | QA de modo oscuro (brief §9.21) | ⬜ opcional |
 
@@ -37,9 +38,10 @@ empleados: sin cuotas ni objetivos de horas.
    `ANTHROPIC_API_KEY` (clave de empresa) en Vercel; modelo `claude-haiku-4-5`
    (el más barato, decisión del cliente) con salida estructurada — fracciones
    de céntimo por frase.
-4. **Síntesis de notas por cliente** — resumen mensual en prosa de en qué se
-   fueron las horas de un cliente, a partir de las notas de línea. Esperar a
-   que haya notas reales antes de construirlo.
+4. **Síntesis de tareas por cliente** — resumen mensual en prosa de en qué se
+   fueron las horas de un cliente, a partir de las tareas de las líneas (la
+   tarea sustituyó a la nota en jul 2026, brief §15). Esperar a que haya
+   tareas reales antes de construirlo.
 
 ### Descartado a propósito (no reabrir sin decisión nueva)
 - **IA que sugiera cantidades de horas** (o copiar cifras de semanas

@@ -15,7 +15,13 @@ import {
   type ReactNode,
 } from "react";
 import { crearClienteNavegador } from "@/lib/supabase/navegador";
-import { aIso, formatearHoras, redondearAPaso } from "@/lib/semana";
+import {
+  aIso,
+  formatearDuracion,
+  interpretarDuracion,
+  limpiarTarea,
+  SEGUNDOS_DIA,
+} from "@/lib/semana";
 import type { Cliente, Proyecto, SesionCronometro } from "@/lib/tipos";
 import { BuscadorCliente } from "./buscador-cliente";
 
@@ -24,19 +30,20 @@ const UMBRAL_AVISO_MS = 10 * 60 * 60 * 1000; // 10 h (§11.3.f)
 export interface EventoCronometro {
   tipo: "inicio" | "volcado";
   proyectoId: string;
-  /** Solo en volcado: celda afectada y su total resultante. */
+  tarea: string;
+  /** Solo en volcado: celda afectada y su total resultante en segundos. */
   fecha?: string;
-  total?: number;
+  segundosTotal?: number;
 }
 
 interface ContextoCronometros {
   sesiones: SesionCronometro[];
   ahora: number;
-  arrancar: (proyectoId: string) => Promise<boolean>;
-  parar: (sesionId: string, horas?: number) => Promise<boolean>;
+  arrancar: (proyectoId: string, tarea: string) => Promise<boolean>;
+  parar: (sesionId: string, segundos?: number) => Promise<boolean>;
   suscribir: (cb: (e: EventoCronometro) => void) => () => void;
   conError: Set<string>;
-  etiquetaProyecto: (proyectoId: string) => string;
+  etiquetaLinea: (proyectoId: string, tarea: string) => string;
 }
 
 const Ctx = createContext<ContextoCronometros | null>(null);
@@ -49,11 +56,9 @@ export function duracionMs(sesion: SesionCronometro, ahora: number): number {
   return Math.max(0, ahora - new Date(sesion.inicio).getTime());
 }
 
-export function formatearDuracion(ms: number): string {
-  const total = Math.floor(ms / 60000);
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  return `${h}:${String(m).padStart(2, "0")}`;
+/** Duración de una sesión en marcha, en el h:mm:ss común de la app. */
+export function formatearDuracionMs(ms: number): string {
+  return formatearDuracion(Math.floor(ms / 1000));
 }
 
 export function ProveedorCronometros({
@@ -75,14 +80,20 @@ export function ProveedorCronometros({
   const oyentesRef = useRef(new Set<(e: EventoCronometro) => void>());
   const tituloBaseRef = useRef<string | null>(null);
 
-  // Un único ticker compartido: 30 s de granularidad (§11.3.b).
+  // Un único ticker compartido a 1 s — solo corre si hay sesiones activas
+  // (sin cronómetros no hay nada que repintar cada segundo).
+  const haySesiones = sesiones.length > 0;
   useEffect(() => {
-    const intervalo = setInterval(() => setAhora(Date.now()), 30_000);
+    if (!haySesiones) return;
+    const intervalo = setInterval(() => setAhora(Date.now()), 1000);
+    return () => clearInterval(intervalo);
+  }, [haySesiones]);
+
+  useEffect(() => {
     const alVolver = () => setAhora(Date.now());
     document.addEventListener("visibilitychange", alVolver);
     window.addEventListener("focus", alVolver);
     return () => {
-      clearInterval(intervalo);
       document.removeEventListener("visibilitychange", alVolver);
       window.removeEventListener("focus", alVolver);
     };
@@ -97,13 +108,16 @@ export function ProveedorCronometros({
         : tituloBaseRef.current;
   }, [sesiones.length]);
 
-  const etiquetaProyecto = useCallback(
-    (proyectoId: string) => {
+  const etiquetaLinea = useCallback(
+    (proyectoId: string, tarea: string) => {
       for (const c of clientes) {
         const p = c.proyectos.find((p) => p.id === proyectoId);
-        if (p) return `${c.nombre} — ${p.nombre}`;
+        if (p) {
+          const base = `${c.nombre} — ${p.nombre}`;
+          return tarea ? `${base} · ${tarea}` : base;
+        }
       }
-      return "Proyecto";
+      return tarea ? `Proyecto · ${tarea}` : "Proyecto";
     },
     [clientes],
   );
@@ -119,33 +133,50 @@ export function ProveedorCronometros({
     };
   }, []);
 
-  async function arrancar(proyectoId: string): Promise<boolean> {
-    if (sesiones.some((s) => s.proyecto_id === proyectoId)) return false;
+  async function arrancar(proyectoId: string, tarea: string): Promise<boolean> {
+    const tareaLimpia = limpiarTarea(tarea);
+    if (
+      sesiones.some(
+        (s) => s.proyecto_id === proyectoId && s.tarea === tareaLimpia,
+      )
+    ) {
+      setAnuncio("Ya hay un cronómetro en marcha en esa tarea.");
+      return false;
+    }
     const { data, error } = await supabase
       .from("cronometros")
       .insert({
         persona_id: personaId,
         proyecto_id: proyectoId,
+        tarea: tareaLimpia,
         dia_atribuido: aIso(new Date()),
       })
       .select()
       .single();
-    if (error || !data) return false;
+    if (error || !data) {
+      // 23505 = índice único parcial: sesión duplicada desde otra pestaña.
+      setAnuncio(
+        error?.code === "23505"
+          ? "Ya hay un cronómetro en marcha en esa tarea."
+          : "No se pudo arrancar el cronómetro.",
+      );
+      return false;
+    }
     setSesiones((prev) => [...prev, data]);
     setAhora(Date.now());
     setAnuncio(
-      `Cronómetro de ${etiquetaProyecto(proyectoId)} iniciado — cuenta para hoy.`,
+      `Cronómetro de ${etiquetaLinea(proyectoId, tareaLimpia)} iniciado — cuenta para hoy.`,
     );
-    emitir({ tipo: "inicio", proyectoId });
+    emitir({ tipo: "inicio", proyectoId, tarea: tareaLimpia });
     return true;
   }
 
-  async function parar(sesionId: string, horas?: number): Promise<boolean> {
+  async function parar(sesionId: string, segundos?: number): Promise<boolean> {
     const sesion = sesiones.find((s) => s.id === sesionId);
     if (!sesion) return true;
     const { data, error } = await supabase.rpc("parar_cronometro", {
       p_id: sesionId,
-      p_horas: horas ?? null,
+      p_segundos: segundos ?? null,
     });
     if (error || !data) {
       setConError((prev) => new Set(prev).add(sesionId));
@@ -158,17 +189,18 @@ export function ProveedorCronometros({
       s.delete(sesionId);
       return s;
     });
-    const volcado = Number(data.volcado ?? 0);
+    const volcado = Number(data.segundos_volcados ?? 0);
     setAnuncio(
       volcado > 0
-        ? `Cronómetro parado. Se han sumado ${formatearHoras(volcado)} h al ${sesion.dia_atribuido}.`
-        : "Menos de 0,25 h: no se ha sumado tiempo.",
+        ? `Cronómetro parado. Se han sumado ${formatearDuracion(volcado)} al ${sesion.dia_atribuido}.`
+        : "Cronómetro descartado: no se ha sumado tiempo.",
     );
     emitir({
       tipo: "volcado",
       proyectoId: sesion.proyecto_id,
+      tarea: sesion.tarea,
       fecha: sesion.dia_atribuido,
-      total: Number(data.total ?? 0),
+      segundosTotal: Number(data.segundos_total ?? 0),
     });
     return true;
   }
@@ -180,7 +212,7 @@ export function ProveedorCronometros({
     parar,
     suscribir,
     conError,
-    etiquetaProyecto,
+    etiquetaLinea,
   };
 
   return (
@@ -204,6 +236,7 @@ export function BandejaCronometros({
   const [abierta, setAbierta] = useState(false);
   const [eligiendo, setEligiendo] = useState(false);
   const [clienteId, setClienteId] = useState("");
+  const [tareaNueva, setTareaNueva] = useState("");
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -222,21 +255,17 @@ export function BandejaCronometros({
     return null;
   }
 
-  const { sesiones, ahora, parar, arrancar, conError, etiquetaProyecto } =
-    crono;
+  const { sesiones, ahora, parar, arrancar, conError, etiquetaLinea } = crono;
   const ordenadas = [...sesiones].sort(
     (a, b) => new Date(a.inicio).getTime() - new Date(b.inicio).getTime(),
   );
   const hayAviso = ordenadas.some(
     (s) => duracionMs(s, ahora) >= UMBRAL_AVISO_MS,
   );
-  const activos = new Set(sesiones.map((s) => s.proyecto_id));
-  const clientesElegibles = clientes
-    .map((c) => ({
-      ...c,
-      proyectos: c.proyectos.filter((p) => !activos.has(p.id)),
-    }))
-    .filter((c) => c.proyectos.length > 0);
+  // Un proyecto con sesión activa sigue siendo elegible: puede arrancarse
+  // otro cronómetro del mismo proyecto con OTRA tarea. El duplicado real
+  // (misma tarea) lo rechazan arrancar() y el índice único de la BD.
+  const clientesElegibles = clientes.filter((c) => c.proyectos.length > 0);
   const clienteElegido = clientesElegibles.find((c) => c.id === clienteId);
 
   return (
@@ -282,7 +311,7 @@ export function BandejaCronometros({
                 >
                   <div className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-tinta">
-                      {etiquetaProyecto(s.proyecto_id)}
+                      {etiquetaLinea(s.proyecto_id, s.tarea)}
                     </span>
                     <span
                       className={`text-xs tabular-nums ${
@@ -296,8 +325,8 @@ export function BandejaCronometros({
                       {error
                         ? "No se pudo parar."
                         : aviso
-                          ? `¿Sigues? Lleva ${formatearDuracion(ms)} en marcha.`
-                          : `${formatearDuracion(ms)} en marcha`}
+                          ? `¿Sigues? Lleva ${formatearDuracionMs(ms)} en marcha.`
+                          : `${formatearDuracionMs(ms)} en marcha`}
                     </span>
                   </div>
                   <button
@@ -328,6 +357,18 @@ export function BandejaCronometros({
               </button>
             ) : (
               <div className="flex flex-col gap-2 p-1">
+                <label className="sr-only" htmlFor="tarea-cronometro">
+                  Tarea (opcional)
+                </label>
+                <input
+                  id="tarea-cronometro"
+                  type="text"
+                  value={tareaNueva}
+                  onChange={(e) => setTareaNueva(e.target.value)}
+                  maxLength={120}
+                  placeholder="Tarea (opcional)"
+                  className="h-9 rounded-lg border border-borde bg-superficie px-2.5 text-sm text-tinta outline-none placeholder:text-texto-suave focus:border-acento focus:ring-2 focus:ring-acento/20"
+                />
                 {!clienteElegido ? (
                   <BuscadorCliente
                     opciones={clientesElegibles.map((c) => ({
@@ -356,9 +397,10 @@ export function BandejaCronometros({
                         <button
                           type="button"
                           onClick={() => {
-                            void arrancar(p.id);
+                            void arrancar(p.id, tareaNueva);
                             setEligiendo(false);
                             setClienteId("");
+                            setTareaNueva("");
                           }}
                           className="w-full rounded-md px-2 py-2 text-left text-sm text-tinta transition-colors hover:bg-superficie-2 focus-visible:outline-2 focus-visible:outline-acento"
                         >
@@ -393,14 +435,15 @@ export function SesionesAntiguas() {
   return (
     <div className="mb-4 space-y-2">
       {antiguas.map((s) => {
-        const sugeridas = Math.min(
-          24,
-          redondearAPaso(duracionMs(s, crono.ahora) / 3_600_000),
+        const sugeridos = Math.min(
+          SEGUNDOS_DIA,
+          Math.floor(duracionMs(s, crono.ahora) / 1000),
         );
-        const valor = horasEditadas[s.id] ?? formatearHoras(sugeridas);
-        const n = Number(valor.replace(",", "."));
-        const valido =
-          Number.isFinite(n) && n >= 0 && n <= 24 && (n * 4) % 1 === 0;
+        const valor = horasEditadas[s.id] ?? formatearDuracion(sugeridos);
+        const interpretado = interpretarDuracion(valor);
+        // null (vacío/cero) equivale a descartar: también es confirmable.
+        const valido = interpretado !== "error";
+        const segundos = typeof interpretado === "number" ? interpretado : 0;
         return (
           <div
             key={s.id}
@@ -409,11 +452,11 @@ export function SesionesAntiguas() {
           >
             <span className="min-w-0 flex-1 basis-56">
               Tenías un cronómetro en{" "}
-              <strong>{crono.etiquetaProyecto(s.proyecto_id)}</strong> desde el{" "}
-              {s.dia_atribuido}. ¿Cuánto tiempo cuentas?
+              <strong>{crono.etiquetaLinea(s.proyecto_id, s.tarea)}</strong>{" "}
+              desde el {s.dia_atribuido}. ¿Cuánto tiempo cuentas?
             </span>
             <label className="sr-only" htmlFor={`horas-${s.id}`}>
-              Horas a contar
+              Tiempo a contar
             </label>
             <input
               id={`horas-${s.id}`}
@@ -424,7 +467,7 @@ export function SesionesAntiguas() {
                 setHorasEditadas((prev) => ({ ...prev, [s.id]: e.target.value }))
               }
               aria-invalid={!valido || undefined}
-              className={`h-11 w-20 rounded-lg border bg-superficie px-2 text-center text-base tabular-nums text-tinta outline-none focus:ring-2 ${
+              className={`h-11 w-28 rounded-lg border bg-superficie px-2 text-center text-base tabular-nums text-tinta outline-none focus:ring-2 ${
                 valido
                   ? "border-borde-fuerte focus:border-acento focus:ring-acento/20"
                   : "border-error focus:ring-error/25"
@@ -439,7 +482,7 @@ export function SesionesAntiguas() {
             <button
               type="button"
               disabled={!valido}
-              onClick={() => void crono.parar(s.id, n)}
+              onClick={() => void crono.parar(s.id, segundos)}
               className="h-11 rounded-lg bg-tinta px-3 text-sm font-semibold text-superficie transition-colors hover:bg-texto focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
             >
               Confirmar

@@ -106,46 +106,87 @@ export function etiquetaSemana(lunesIso: string): string {
   return `${lunes.getDate()} ${MESES_CORTOS[lunes.getMonth()]} – ${finalDomingo}`;
 }
 
-/** Paso mínimo de horas (cuartos de hora). */
-export const PASO_HORAS = 0.25;
+/** Tope por celda: un día completo, en segundos. */
+export const SEGUNDOS_DIA = 86400;
 
-/** Redondea al múltiplo de 0,25 más cercano (empates hacia arriba). */
-export function redondearAPaso(horas: number): number {
-  return Math.round(horas * 4) / 4;
-}
+/**
+ * Separador interno de las claves de línea/celda. Unidad de separación
+ * ASCII: no es tecleable y `limpiarTarea` la filtra de toda entrada.
+ * (El separador "|" anterior rompería con tareas de texto libre.)
+ */
+export const SEP_LINEA = "\u001f";
 
-/** Formatea horas para mostrar: 7.5 → "7,5"; 1.25 → "1,25"; 8 → "8". */
-export function formatearHoras(horas: number): string {
-  return redondearAPaso(horas).toString().replace(".", ",");
+/** Clave estable de una línea (proyecto + tarea; "" = sin tarea). */
+export function idLinea(proyectoId: string, tarea: string): string {
+  return `${proyectoId}${SEP_LINEA}${tarea}`;
 }
 
 /**
- * Interpreta la entrada de una celda y la normaliza a pasos de 0,25
- * dentro de (0, 24]. Acepta decimales ("7,5", "1.25", " 8 ") y formatos
- * de reloj ("1:30", "1h30", "1h", "45m"). Devuelve:
- * - number  → valor válido a guardar
+ * Normaliza una tarea escrita por el usuario: sin caracteres de control
+ * (incluido el separador interno), recortada y a lo sumo 120 caracteres —
+ * el mismo límite que el check de la BD.
+ */
+export function limpiarTarea(texto: string): string {
+  return texto.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 120).trim();
+}
+
+/** Paso de los steppers móviles: 15 minutos. */
+export const PASO_STEPPER_SEGUNDOS = 900;
+
+/** Formatea una duración en segundos como reloj: 5445 → "1:30:45". */
+export function formatearDuracion(segundos: number): string {
+  const s = Math.max(0, Math.round(segundos));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const seg = s % 60;
+  return `${h}:${String(m).padStart(2, "0")}:${String(seg).padStart(2, "0")}`;
+}
+
+/**
+ * Horas decimales con coma para el CSV/Excel: 5400 → "1,5"; 1 → "0,000278".
+ * Hasta 6 decimales, sin ceros de cola.
+ */
+export function formatearHorasDecimal(segundos: number): string {
+  return (segundos / 3600)
+    .toFixed(6)
+    .replace(/(\.\d*?)0+$/, "$1")
+    .replace(/\.$/, "")
+    .replace(".", ",");
+}
+
+/**
+ * Interpreta la entrada de una celda y devuelve la duración en SEGUNDOS,
+ * dentro de (0, 86400]. Acepta horas decimales ("7,5", "1.25", " 8 "),
+ * reloj ("1:30", "1h30", "1h", "1:30:45") y minutos ("45m", "90min").
+ * Devuelve:
+ * - number  → segundos a guardar
  * - null    → celda vacía (borrar registro)
  * - "error" → entrada inválida
  */
-export function interpretarHoras(entrada: string): number | null | "error" {
+export function interpretarDuracion(entrada: string): number | null | "error" {
   const limpia = entrada.trim().toLowerCase();
   if (limpia === "") return null;
 
-  let n: number;
+  const relojSeg = limpia.match(/^(\d{1,2}):([0-5]?\d):([0-5]?\d)$/); // 1:30:45
   const reloj = limpia.match(/^(\d{1,2})[:h](?:([0-5]?\d))?$/); // 1:30, 1h30, 1h
   const soloMinutos = limpia.match(/^(\d{1,4})\s*m(?:in)?$/); // 45m, 90min
-  if (reloj) {
-    n = Number(reloj[1]) + (reloj[2] !== undefined ? Number(reloj[2]) : 0) / 60;
+
+  let s: number;
+  if (relojSeg) {
+    s = Number(relojSeg[1]) * 3600 + Number(relojSeg[2]) * 60 + Number(relojSeg[3]);
+  } else if (reloj) {
+    s = Number(reloj[1]) * 3600 + (reloj[2] !== undefined ? Number(reloj[2]) : 0) * 60;
   } else if (soloMinutos) {
-    n = Number(soloMinutos[1]) / 60;
+    s = Number(soloMinutos[1]) * 60;
   } else {
-    n = Number(limpia.replace(",", "."));
-    if (!Number.isFinite(n)) return "error";
+    const n = Number(limpia.replace(",", "."));
+    if (!Number.isFinite(n) || n < 0) return "error";
+    if (n === 0) return null;
+    s = Math.round(n * 3600);
+    if (s === 0) return "error"; // positivo pero por debajo de medio segundo
   }
 
-  if (n < 0) return "error";
-  if (n === 0) return null;
-  const redondeada = redondearAPaso(n);
-  if (redondeada === 0 || redondeada > 24) return "error";
-  return redondeada;
+  if (s === 0) return null;
+  if (s > SEGUNDOS_DIA) return "error";
+  return s;
 }

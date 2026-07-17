@@ -19,7 +19,9 @@ Variables de entorno en `.env.local` (ver `.env.example`).
 ## Configuración de Supabase (una sola vez)
 
 1. **SQL**: ejecutar en el SQL Editor, en orden:
-   - `supabase/migrations/001_esquema_rls.sql`
+   - `supabase/migrations/001_esquema_rls.sql` … `006_tiempo_exacto_tarea.sql`
+     (todas, en orden; 006 migra horas→segundos y nota→tarea, y va SIEMPRE
+     antes del deploy del front que la usa)
    - `supabase/seed.sql` (revisar personas/clientes antes)
 2. **Usuarios y contraseñas** (login con email + contraseña, sin magic link):
    - Copiar `scripts/usuarios.ejemplo.csv` a `scripts/usuarios.csv` y rellenar

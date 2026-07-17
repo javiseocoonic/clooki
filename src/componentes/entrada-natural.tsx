@@ -5,7 +5,7 @@ import {
   interpretarFrase,
   type PropuestaHoras,
 } from "@/app/acciones-ia";
-import { NOMBRES_DIA, deIso, formatearHoras } from "@/lib/semana";
+import { NOMBRES_DIA, deIso, formatearDuracion } from "@/lib/semana";
 
 interface Props {
   alAplicar: (propuestas: PropuestaHoras[]) => Promise<void> | void;
@@ -155,16 +155,16 @@ export function EntradaNatural({ alAplicar }: Props) {
                       />
                       <span className="min-w-0 flex-1 truncate text-tinta">
                         {p.cliente} — {p.proyecto}
-                        {p.nota && (
-                          <span className="text-texto-suave"> ({p.nota})</span>
+                        {p.tarea && (
+                          <span className="text-texto-suave"> · {p.tarea}</span>
                         )}
                       </span>
                       <span className="shrink-0 text-xs text-texto-suave">
                         {etiquetaFecha(p.fecha)}
                       </span>
-                      <span className="w-16 shrink-0 text-right font-semibold tabular-nums text-tinta">
+                      <span className="w-20 shrink-0 text-right font-semibold tabular-nums text-tinta">
                         {p.sumar ? "+" : ""}
-                        {formatearHoras(p.horas)} h
+                        {formatearDuracion(p.segundos)}
                       </span>
                     </label>
                   </li>
