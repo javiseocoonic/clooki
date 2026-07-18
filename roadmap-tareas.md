@@ -148,7 +148,7 @@ tarjeta_asignaciones                               -- asignación múltiple (dec
 |---|---|---|
 | **T·1 Modelo** | Migración 007 (`tarjetas` + `tarjeta_asignaciones` + RLS + trigger + índices), tipos en `tipos.ts`, carga en `src/lib/datos/tareas.ts` | S — ✅ 18 jul |
 | **T·2 Tablero** | Ruta `/tareas`, entrada de menú, columnas por cliente, crear/editar/asignar/estados/borrar, orden con posicion fraccional, vista móvil | L — ✅ 18 jul (pendiente de rodaje real) |
-| **T·3 Puente** | Botón «Mis tareas» en Mi semana: panel, añadir línea, marcar hecha, badge, automatismo pendiente→en_curso | M |
+| **T·3 Puente** | Botón «Mis tareas» en Mi semana: panel, añadir línea, marcar hecha, badge, automatismo pendiente→en_curso | M — ✅ 18 jul (pendiente de rodaje real) |
 | **T·4 Ampliaciones** (decidir con uso real) | Realtime (ver movimientos ajenos al instante), IA («crea una tarjeta para X»; el Resumen inteligente de la fase IA·2 puede leer tarjetas hechas), arrastrar entre dispositivos táctiles, filtros por persona en el tablero | — |
 
 Orden recomendado: T·1 → T·2 → T·3. El tablero es usable al final de T·2;

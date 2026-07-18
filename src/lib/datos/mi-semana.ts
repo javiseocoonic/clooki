@@ -8,6 +8,7 @@ import type {
   Proyecto,
   RegistroHoras,
   SesionCronometro,
+  Tarjeta,
 } from "@/lib/tipos";
 
 /** Semanas hacia atrás que se miran para "recordar" las líneas de trabajo. */
@@ -24,6 +25,12 @@ export interface ProyectoConCliente extends Proyecto {
 export interface LineaSemana extends ProyectoConCliente {
   tarea: string;
 }
+
+/** Tarjeta del tablero asignada a la persona (puente «Mis tareas», T·3). */
+export type TarjetaMia = Pick<
+  Tarjeta,
+  "id" | "titulo" | "proyecto_id" | "estado" | "posicion"
+>;
 
 export interface DatosMiSemana {
   persona: Persona;
@@ -51,6 +58,8 @@ export interface DatosMiSemana {
    * más antiguo. Alimenta el grupo "Recientes" del selector de cliente.
    */
   clientesRecientes: string[];
+  /** Tarjetas pendientes/en curso asignadas a la persona («Mis tareas»). */
+  misTarjetas: TarjetaMia[];
 }
 
 /**
@@ -80,28 +89,45 @@ export async function cargarMiSemana(
   const dias = diasDeSemana(lunesIso);
   const desdeRecordado = sumarSemanas(lunesIso, -SEMANAS_RECORDADAS);
 
-  const [clientesRes, proyectosRes, horasRes, recientesRes, sesionesRes] =
-    await Promise.all([
-      supabase.from("clientes").select("*").eq("activo", true).order("nombre"),
-      supabase.from("proyectos").select("*").order("nombre"),
-      supabase
-        .from("horas")
-        .select("*")
-        .eq("persona_id", persona.id)
-        .gte("fecha", dias[0])
-        .lte("fecha", dias[6]),
-      supabase
-        .from("horas")
-        .select("proyecto_id, fecha, tarea")
-        .eq("persona_id", persona.id)
-        .gte("fecha", desdeRecordado)
-        .lt("fecha", dias[0]),
-      supabase
-        .from("cronometros")
-        .select("*")
-        .eq("persona_id", persona.id)
-        .is("fin", null),
-    ]);
+  const [
+    clientesRes,
+    proyectosRes,
+    horasRes,
+    recientesRes,
+    sesionesRes,
+    tarjetasRes,
+    asignacionesRes,
+  ] = await Promise.all([
+    supabase.from("clientes").select("*").eq("activo", true).order("nombre"),
+    supabase.from("proyectos").select("*").order("nombre"),
+    supabase
+      .from("horas")
+      .select("*")
+      .eq("persona_id", persona.id)
+      .gte("fecha", dias[0])
+      .lte("fecha", dias[6]),
+    supabase
+      .from("horas")
+      .select("proyecto_id, fecha, tarea")
+      .eq("persona_id", persona.id)
+      .gte("fecha", desdeRecordado)
+      .lt("fecha", dias[0]),
+    supabase
+      .from("cronometros")
+      .select("*")
+      .eq("persona_id", persona.id)
+      .is("fin", null),
+    // «Mis tareas»: dos consultas en paralelo (todas las no-hechas + mis
+    // asignaciones) y el cruce en memoria — evita un round-trip secuencial.
+    supabase
+      .from("tarjetas")
+      .select("id, titulo, proyecto_id, estado, posicion")
+      .neq("estado", "hecha"),
+    supabase
+      .from("tarjeta_asignaciones")
+      .select("tarjeta_id")
+      .eq("persona_id", persona.id),
+  ]);
 
   const clientes = clientesRes.data ?? [];
   const proyectos = proyectosRes.data ?? [];
@@ -160,6 +186,13 @@ export async function cargarMiSemana(
     (d) => !fechasConHoras.has(d),
   ).length;
 
+  const misIds = new Set(
+    (asignacionesRes.data ?? []).map((a) => a.tarjeta_id),
+  );
+  const misTarjetas = (tarjetasRes.data ?? []).filter((t) =>
+    misIds.has(t.id),
+  );
+
   return {
     persona,
     clientes: clientes.map((c) => ({
@@ -171,5 +204,6 @@ export async function cargarMiSemana(
     diasSinHorasSemanaAnterior,
     sesiones,
     clientesRecientes,
+    misTarjetas,
   };
 }

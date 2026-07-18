@@ -117,6 +117,7 @@ export default async function PaginaMiSemana({
           clientes={datos.clientes}
           clientesRecientes={datos.clientesRecientes}
           horas={datos.horas}
+          misTarjetas={datos.misTarjetas}
         />
       </main>
     </div>

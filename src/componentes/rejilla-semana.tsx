@@ -29,7 +29,8 @@ import type {
   RegistroHoras,
   SesionCronometro,
 } from "@/lib/tipos";
-import type { LineaSemana } from "@/lib/datos/mi-semana";
+import type { LineaSemana, TarjetaMia } from "@/lib/datos/mi-semana";
+import { MisTareas } from "./mis-tareas";
 import { AnadirLinea } from "./anadir-linea";
 import { EntradaNatural } from "./entrada-natural";
 import type { PropuestaHoras } from "@/app/acciones-ia";
@@ -49,6 +50,8 @@ interface Props {
   /** Ids de clientes con horas recientes de la persona, más reciente primero. */
   clientesRecientes: string[];
   horas: RegistroHoras[];
+  /** Tarjetas pendientes/en curso asignadas a la persona («Mis tareas»). */
+  misTarjetas: TarjetaMia[];
 }
 
 // "Hoy" solo se conoce con certeza en el cliente (zona horaria del usuario).
@@ -101,10 +104,16 @@ export function RejillaSemana({
   clientes,
   clientesRecientes,
   horas,
+  misTarjetas,
 }: Props) {
   const supabase = useMemo(() => crearClienteNavegador(), []);
   const dias = useMemo(() => diasDeSemana(lunesIso), [lunesIso]);
   const tablaRef = useRef<HTMLDivElement>(null);
+  // «Mis tareas» registra aquí su oyente: cada guardado de horas con éxito
+  // le avisa para el automatismo pendiente → en curso (roadmap §4).
+  const avisarGuardadoRef = useRef<
+    ((proyectoId: string, tarea: string) => void) | null
+  >(null);
   const versionesRef = useRef<Record<string, number>>({});
   const debouncesRef = useRef<Record<string, ReturnType<typeof setTimeout>>>(
     {},
@@ -245,6 +254,7 @@ export function RejillaSemana({
     if (versionesRef.current[k] !== version) return; // llegó una edición posterior
 
     if (ok) {
+      if (segundos !== null) avisarGuardadoRef.current?.(proyectoId, tarea);
       setGuardadas((prev) => {
         const s = { ...prev };
         if (segundos === null) delete s[k];
@@ -1455,6 +1465,15 @@ export function RejillaSemana({
           clientesRecientes={clientesRecientes}
           clavesExistentes={clavesVisibles}
           alAnadir={anadirLineas}
+        />
+        <MisTareas
+          clientes={clientes}
+          tarjetasIniciales={misTarjetas}
+          clavesExistentes={clavesVisibles}
+          alAnadir={anadirLineas}
+          conectarGuardado={(fn) => {
+            avisarGuardadoRef.current = fn;
+          }}
         />
         {(!verFinde || !hayHorasFinde) && (
           <button
