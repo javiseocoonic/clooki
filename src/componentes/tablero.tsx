@@ -261,6 +261,10 @@ export function Tablero({
   );
   const [hechasAbiertas, setHechasAbiertas] = useState<Set<string>>(new Set());
   const [clienteMovil, setClienteMovil] = useState<string | null>(null);
+  // Vista «Mías»: solo tarjetas asignadas a ti (y las columnas quedan en
+  // consecuencia). En esta vista NO se reordena: mover relativo a una
+  // lista con huecos escribiría posiciones confusas para el resto.
+  const [soloMias, setSoloMias] = useState(false);
   const arrastrandoRef = useRef<string | null>(null);
 
   const proyectoACliente = useMemo(() => {
@@ -280,13 +284,25 @@ export function Tablero({
     [equipo],
   );
 
-  // Columnas = clientes con alguna tarjeta (+ la columna donde se está creando).
+  const tarjetasVista = useMemo(
+    () =>
+      soloMias
+        ? tarjetas.filter((t) => t.asignados.includes(personaId))
+        : tarjetas,
+    [tarjetas, soloMias, personaId],
+  );
+  const nMias = useMemo(
+    () => tarjetas.filter((t) => t.asignados.includes(personaId)).length,
+    [tarjetas, personaId],
+  );
+
+  // Columnas = clientes con alguna tarjeta EN LA VISTA (+ donde se crea).
   const columnas = useMemo(() => {
     const conTarjeta = new Set(
-      tarjetas.map((t) => proyectoACliente.get(t.proyecto_id)?.id),
+      tarjetasVista.map((t) => proyectoACliente.get(t.proyecto_id)?.id),
     );
     return clientes.filter((c) => conTarjeta.has(c.id) || creandoEn === c.id);
-  }, [clientes, tarjetas, proyectoACliente, creandoEn]);
+  }, [clientes, tarjetasVista, proyectoACliente, creandoEn]);
 
   const clienteMovilEfectivo =
     clienteMovil && columnas.some((c) => c.id === clienteMovil)
@@ -642,7 +658,7 @@ export function Tablero({
     return (
       <li
         key={t.id}
-        draggable
+        draggable={!soloMias}
         onDragStart={(e) => {
           arrastrandoRef.current = t.id;
           e.dataTransfer.effectAllowed = "move";
@@ -722,7 +738,7 @@ export function Tablero({
             {ETIQUETA_ESTADO[t.estado]}
           </button>
           <span className="ml-auto flex items-center">
-            {t.estado !== "hecha" && (
+            {t.estado !== "hecha" && !soloMias && (
               <>
                 <button
                   type="button"
@@ -812,9 +828,13 @@ export function Tablero({
   }
 
   function columna(c: ClienteConProyectos) {
-    const visibles = visiblesOrdenadas(c.id);
+    // La vista filtra lo que se pinta; la aritmética de posiciones
+    // (colocar/mover) sigue trabajando sobre la columna completa.
+    const enVista = (t: TarjetaTablero) =>
+      !soloMias || t.asignados.includes(personaId);
+    const visibles = visiblesOrdenadas(c.id).filter(enVista);
     const hechas = tarjetasDe(c.id)
-      .filter((t) => t.estado === "hecha")
+      .filter((t) => t.estado === "hecha" && enVista(t))
       .sort((a, b) => (b.hecha_en ?? "").localeCompare(a.hecha_en ?? ""));
     const abiertas = hechasAbiertas.has(c.id);
     const activaMovil = clienteMovilEfectivo === c.id;
@@ -917,6 +937,36 @@ export function Tablero({
         <h1 className="font-marca text-xl font-semibold tracking-tight text-tinta">
           Tareas
         </h1>
+        <div
+          role="group"
+          aria-label="Filtrar tarjetas"
+          className="inline-flex rounded-lg bg-superficie-2 p-0.5"
+        >
+          <button
+            type="button"
+            aria-pressed={!soloMias}
+            onClick={() => setSoloMias(false)}
+            className={`rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-acento ${
+              !soloMias
+                ? "bg-tinta font-medium text-superficie"
+                : "text-texto-suave hover:text-tinta"
+            }`}
+          >
+            Todas
+          </button>
+          <button
+            type="button"
+            aria-pressed={soloMias}
+            onClick={() => setSoloMias(true)}
+            className={`rounded-md px-3 py-1.5 text-sm tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-acento ${
+              soloMias
+                ? "bg-tinta font-medium text-superficie"
+                : "text-texto-suave hover:text-tinta"
+            }`}
+          >
+            Mías{nMias > 0 ? ` (${nMias})` : ""}
+          </button>
+        </div>
         <span className="ml-auto flex items-center gap-2">
           <Link
             href={verArchivadas ? "/tareas" : "/tareas?archivadas=1"}
@@ -964,7 +1014,9 @@ export function Tablero({
 
       {columnas.length === 0 ? (
         <div className="rounded-xl border border-dashed border-borde p-8 text-center text-sm text-texto-suave">
-          Aún no hay tarjetas. Crea la primera con «Nueva tarjeta».
+          {soloMias
+            ? "No tienes tarjetas asignadas. Pasa a «Todas» y coge alguna."
+            : "Aún no hay tarjetas. Crea la primera con «Nueva tarjeta»."}
         </div>
       ) : (
         <div className="flex flex-1 gap-4 overflow-x-auto pb-4">
