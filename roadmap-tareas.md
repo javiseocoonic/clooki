@@ -5,14 +5,15 @@ equipo planifique el trabajo en un tablero tipo Trello y que ese plan fluya
 sin fricción hacia el registro de horas — la tarjeta que hoy planificas es
 la línea en la que mañana apuntas tiempo.
 
-**Decisiones ya tomadas con el cliente (17 jul 2026):**
+**Decisiones ya tomadas con el cliente (17–18 jul 2026):**
 
 | Decisión | Elegido |
 |---|---|
 | ¿La tarjeta lleva proyecto? | **Sí, obligatorio** — columna = cliente, tarjeta = proyecto + título |
 | ¿Tarjetas sin asignar? | **Sí** — funcionan como backlog del cliente; cualquiera «la coge» |
+| ¿Cuántas personas por tarjeta? | **Varias o ninguna** (18 jul) — asignación múltiple; sin asignar = backlog. Cualquiera puede autoasignarse a cualquier tarjeta |
 | Estados | **Pendiente → En curso → Hecha** (chips; las hechas se pliegan) |
-| Botón «Mis tareas» en Mi semana | **Añade la línea** cliente→proyecto→tarea a la rejilla de un clic |
+| Botón «Mis tareas» en Mi semana | **Añade la línea** cliente→proyecto→tarea a la rejilla de un clic; en curso primero |
 
 ---
 
@@ -50,7 +51,7 @@ la línea en la que mañana apuntas tiempo.
 
 ## 2) Modelo de datos (migración 007)
 
-Una tabla nueva; nada de lo existente cambia (ni `horas`, ni `cronometros`).
+Dos tablas nuevas; nada de lo existente cambia (ni `horas`, ni `cronometros`).
 
 ```
 tarjetas
@@ -58,24 +59,33 @@ tarjetas
   proyecto_id   uuid not null → proyectos(id)     -- el cliente se deriva del proyecto
   titulo        text not null                      -- check: recortado, 1..120 (mismo límite que horas.tarea)
   descripcion   text                               -- opcional, detalle libre
-  asignada_a    uuid null → personas(id)           -- null = backlog del cliente
   creada_por    uuid not null → personas(id)
   estado        text not null default 'pendiente'  -- check: pendiente | en_curso | hecha
-  posicion      numeric not null                   -- orden dentro de la columna (fraccional: mover = media entre vecinas, sin renumerar)
+  posicion      numeric not null                   -- orden dentro de la columna (fraccional: mover = media entre
+                                                   -- vecinas; insertar con saltos grandes y renumerar la columna
+                                                   -- cuando la diferencia entre vecinas baje de un umbral)
   creada_en     timestamptz default now()
   actualizada_en timestamptz (trigger, como horas)
+
+tarjeta_asignaciones                               -- asignación múltiple (decisión 18 jul)
+  tarjeta_id    uuid → tarjetas(id) on delete cascade
+  persona_id    uuid → personas(id)
+  pk (tarjeta_id, persona_id)                      -- sin filas = backlog del cliente
 ```
 
-- **RLS**: todo el equipo activo **lee** todas las tarjetas (transparencia del
-  tablero). **Crear**: cualquiera. **Editar/mover/cambiar estado**: creador,
-  persona asignada o admin. **Asignar**: al crear puedes asignarla a
-  cualquiera; después, cualquiera puede *auto*asignarse una tarjeta del
-  backlog («la cojo yo») y el admin puede reasignar lo que sea. **Borrar**:
-  creador o admin (con confirmación estilo papelera).
+- **RLS**: todo el equipo activo **lee** todas las tarjetas y asignaciones
+  (transparencia del tablero). **Crear**: cualquiera. **Editar/mover/cambiar
+  estado**: creador, cualquier persona asignada o admin. **Asignar**: al
+  crear puedes asignar a cualquiera; después, cualquiera puede
+  *auto*asignarse a cualquier tarjeta («la cojo yo» = insertar su propia
+  fila, idempotente con `on conflict do nothing`) o quitarse; añadir/quitar
+  a *otros* queda para creador o admin. Con asignación múltiple no hay
+  carrera al «cogerla»: dos personas a la vez es un resultado válido, no un
+  conflicto. **Borrar**: creador o admin (con confirmación estilo papelera).
 - **Vínculo con horas: por copia, no por FK.** Al añadir la línea, el título
   se copia como `horas.tarea` (pasado por `limpiarTarea`). El estado «En
-  curso» se calcula cruzando (persona asignada, proyecto, título) contra
-  `horas`. *Limitación aceptada:* renombrar una tarjeta con horas ya
+  curso» se calcula cruzando (cualquiera de las personas asignadas, proyecto,
+  título) contra `horas`. *Limitación aceptada:* renombrar una tarjeta con horas ya
   apuntadas rompe el cruce hacia atrás — se documenta y la UI avisa al
   renombrar. La alternativa (FK desde `horas`) acoplaría el registro de
   horas al tablero y viola el principio de que Mi semana funciona sola.
@@ -89,8 +99,8 @@ tarjetas
 - **Escritorio**: columnas por cliente activo con scroll horizontal, estilo
   tablero. Solo aparecen columnas de clientes con tarjetas + un buscador para
   crear en cualquier cliente (evita 30 columnas vacías). Tarjeta: título,
-  chip de proyecto, avatar/iniciales de la persona asignada (o «Sin asignar»
-  en tenue), chip de estado. Las **hechas** se pliegan bajo un contador
+  chip de proyecto, iniciales de las personas asignadas (apiladas; o «Sin
+  asignar» en tenue), chip de estado. Las **hechas** se pliegan bajo un contador
   («✓ 4 hechas») por columna.
 - **Móvil**: mismo patrón que Mi semana — selector de cliente (como el
   selector de día) y una columna a la vista. El tablero completo no cabe ni
@@ -113,15 +123,18 @@ tarjetas
 - Botón **«Mis tareas»** a la derecha de «+ Añadir línea». Con un badge del
   número de tarjetas pendientes+en curso asignadas a ti.
 - Abre un panel (mismo patrón visual que Añadir línea) con tus tarjetas
-  agrupadas por cliente: título, proyecto y estado.
+  (aquellas en las que estás asignado) agrupadas por cliente: título,
+  proyecto y estado. **Orden dentro de cada cliente: primero las en curso,
+  después las pendientes** (lo que ya está en marcha es lo que vienes a
+  continuar); dentro de cada grupo, por posición del tablero.
   - **Clic en una tarjeta** → se añade la línea proyecto+tarea a la rejilla
     (mismo `anadirLineas` que ya existe) y el foco va a la celda de hoy.
   - Las que **ya tienen línea esta semana** aparecen marcadas ✓ y no se
     duplican (misma regla de par exacto proyecto+tarea que Añadir línea).
   - Cada tarjeta lleva un check rápido de **marcar Hecha** sin ir al tablero.
 - **Automatismo mínimo**: al guardar horas o arrancar cronómetro en una línea
-  cuyo par (proyecto, tarea) coincide con una tarjeta tuya en «pendiente»,
-  la tarjeta pasa a **en_curso**. Nada más se automatiza: «hecha» siempre es
+  cuyo par (proyecto, tarea) coincide con una tarjeta en «pendiente» en la
+  que estás asignado, la tarjeta pasa a **en_curso**. Nada más se automatiza: «hecha» siempre es
   decisión humana (coherente con la honestidad del dato del brief).
 - Lo inverso no existe: apuntar horas **no** exige tarjeta. Las líneas
   manuales, la IA y el MCP siguen funcionando exactamente igual sin pasar
@@ -133,7 +146,7 @@ tarjetas
 
 | Fase | Contenido | Tamaño |
 |---|---|---|
-| **T·1 Modelo** | Migración 007 (`tarjetas` + RLS + trigger + índices), tipos en `tipos.ts`, carga en `src/lib/datos/tareas.ts` | S |
+| **T·1 Modelo** | Migración 007 (`tarjetas` + `tarjeta_asignaciones` + RLS + trigger + índices), tipos en `tipos.ts`, carga en `src/lib/datos/tareas.ts` | S |
 | **T·2 Tablero** | Ruta `/tareas`, entrada de menú, columnas por cliente, crear/editar/asignar/estados/borrar, orden con posicion fraccional, vista móvil | L |
 | **T·3 Puente** | Botón «Mis tareas» en Mi semana: panel, añadir línea, marcar hecha, badge, automatismo pendiente→en_curso | M |
 | **T·4 Ampliaciones** (decidir con uso real) | Realtime (ver movimientos ajenos al instante), IA («crea una tarjeta para X»; el Resumen inteligente de la fase IA·2 puede leer tarjetas hechas), arrastrar entre dispositivos táctiles, filtros por persona en el tablero | — |
@@ -160,13 +173,15 @@ migración siempre antes que el front, como en la 006.
 
 ---
 
-## 7) Dudas abiertas (a decidir antes de T·2, ninguna bloquea T·1)
+## 7) Dudas cerradas (decisión del cliente, 18 jul 2026)
 
-1. **¿Quién ve el backlog sin asignar en «Mis tareas»?** Propuesta: solo tus
-   tarjetas asignadas (literal al encargo); el backlog se coge desde el
-   tablero. Alternativa: una sección plegada «Sin asignar de tus clientes».
-2. **Tarjetas hechas: ¿se archivan solas?** Propuesta: a los 30 días de
-   hecha, la tarjeta se oculta del tablero (sigue en BD). Evita columnas
-   infinitas sin borrar historia.
-3. **¿Límite de tarjetas por columna visible?** Si un cliente acumula
-   decenas, ¿paginamos/plegamos? Decidir con datos reales.
+1. **¿Quién ve el backlog sin asignar en «Mis tareas»?** → **Solo tus
+   tarjetas asignadas.** El panel es «qué tengo yo»; el backlog se coge
+   desde el tablero, que es donde cogerlo es un acto consciente.
+2. **Tarjetas hechas: ¿se archivan solas?** → **Sí, a los 30 días** de
+   hecha se ocultan del tablero (siguen en BD), con un enlace «ver
+   archivadas» por columna para no perder la confianza de que nada se borra.
+3. **¿Límite de tarjetas por columna visible?** → **No decidir ahora.** Con
+   las hechas plegadas y el autoarchivado, una columna que crezca sin
+   control es señal de un problema de uso, no de UI. Revisar con datos
+   reales.

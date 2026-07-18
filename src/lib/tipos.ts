@@ -54,6 +54,32 @@ export type SesionCronometro = {
   segundos_volcados: number | null;
 }
 
+export type EstadoTarjeta = "pendiente" | "en_curso" | "hecha";
+
+export type Tarjeta = {
+  id: string;
+  proyecto_id: string;
+  /** Mismo límite que `horas.tarea` (120, recortado): al llevarla a la
+   *  rejilla, el título SE COPIA como tarea de línea. */
+  titulo: string;
+  descripcion: string | null;
+  creada_por: string;
+  estado: EstadoTarjeta;
+  /** Orden dentro de la columna. Fraccional: mover = media entre vecinas. */
+  posicion: number;
+  /** La fija/limpia el trigger al entrar/salir de 'hecha'; base del
+   *  autoarchivado a 30 días. Solo lectura desde la app. */
+  hecha_en: string | null;
+  creada_en: string;
+  actualizado_en: string;
+}
+
+/** Asignación múltiple (0..n por tarjeta); sin filas = backlog. */
+export type TarjetaAsignacion = {
+  tarjeta_id: string;
+  persona_id: string;
+}
+
 export type ClaveApi = {
   id: string;
   persona_id: string;
@@ -116,6 +142,24 @@ export type Database = {
         > &
           Partial<SesionCronometro>;
         Update: Partial<Omit<SesionCronometro, "id">>;
+        Relationships: [];
+      };
+      tarjetas: {
+        // hecha_en y actualizado_en los gobiernan triggers: fuera de
+        // Insert/Update a propósito.
+        Row: Tarjeta;
+        Insert: Pick<Tarjeta, "proyecto_id" | "titulo" | "creada_por" | "posicion"> &
+          Partial<Pick<Tarjeta, "id" | "descripcion" | "estado">>;
+        Update: Partial<
+          Pick<Tarjeta, "proyecto_id" | "titulo" | "descripcion" | "estado" | "posicion">
+        >;
+        Relationships: [];
+      };
+      tarjeta_asignaciones: {
+        // Filas (tarjeta, persona) puras: se crean y se borran, sin update.
+        Row: TarjetaAsignacion;
+        Insert: TarjetaAsignacion;
+        Update: Partial<TarjetaAsignacion>;
         Relationships: [];
       };
       claves_api: {
