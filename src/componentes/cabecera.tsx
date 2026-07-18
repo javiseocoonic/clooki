@@ -26,7 +26,7 @@ export function Cabecera({
   children,
 }: {
   persona: Persona;
-  seccion: "semana" | "resumen" | "gestion";
+  seccion: "semana" | "tareas" | "resumen" | "gestion";
   children?: ReactNode;
 }) {
   return (
@@ -37,19 +37,25 @@ export function Cabecera({
       >
         <Logotipo className="text-lg" />
       </Link>
-      {persona.rol === "admin" && (
-        <nav aria-label="Secciones" className="flex items-center gap-1">
-          <Link href="/" className={claseEnlace(seccion === "semana")}>
-            Mi semana
-          </Link>
-          <Link href="/resumen" className={claseEnlace(seccion === "resumen")}>
-            Resumen
-          </Link>
-          <Link href="/gestion" className={claseEnlace(seccion === "gestion")}>
-            Gestión
-          </Link>
-        </nav>
-      )}
+      {/* Mi semana y Tareas son de todo el equipo; Resumen y Gestión, admin. */}
+      <nav aria-label="Secciones" className="flex items-center gap-1">
+        <Link href="/" className={claseEnlace(seccion === "semana")}>
+          Mi semana
+        </Link>
+        <Link href="/tareas" className={claseEnlace(seccion === "tareas")}>
+          Tareas
+        </Link>
+        {persona.rol === "admin" && (
+          <>
+            <Link href="/resumen" className={claseEnlace(seccion === "resumen")}>
+              Resumen
+            </Link>
+            <Link href="/gestion" className={claseEnlace(seccion === "gestion")}>
+              Gestión
+            </Link>
+          </>
+        )}
+      </nav>
       <span className="ml-auto">{children}</span>
       <span className="hidden text-sm text-texto-suave sm:inline">
         {persona.nombre}

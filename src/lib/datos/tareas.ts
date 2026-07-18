@@ -1,5 +1,11 @@
 import { crearClienteServidor } from "@/lib/supabase/servidor";
-import type { Cliente, Persona, Proyecto, Tarjeta } from "@/lib/tipos";
+import type {
+  Cliente,
+  Persona,
+  Proyecto,
+  SesionCronometro,
+  Tarjeta,
+} from "@/lib/tipos";
 
 /** Días tras «hecha» antes de ocultarse del tablero (roadmap §7.2). */
 export const DIAS_ARCHIVADO = 30;
@@ -16,6 +22,8 @@ export interface DatosTareas {
   equipo: Pick<Persona, "id" | "nombre">[];
   /** Ordenadas por posición dentro de su columna (empate: antigüedad). */
   tarjetas: TarjetaTablero[];
+  /** Cronómetros activos de la persona (bandeja de la cabecera). */
+  sesiones: SesionCronometro[];
 }
 
 /**
@@ -54,18 +62,29 @@ export async function cargarTareas(
     );
   }
 
-  const [clientesRes, proyectosRes, equipoRes, tarjetasRes, asignacionesRes] =
-    await Promise.all([
-      supabase.from("clientes").select("*").eq("activo", true).order("nombre"),
-      supabase.from("proyectos").select("*").eq("activo", true).order("nombre"),
-      supabase
-        .from("personas")
-        .select("id, nombre")
-        .eq("activo", true)
-        .order("nombre"),
-      consultaTarjetas.order("posicion").order("creada_en"),
-      supabase.from("tarjeta_asignaciones").select("*"),
-    ]);
+  const [
+    clientesRes,
+    proyectosRes,
+    equipoRes,
+    tarjetasRes,
+    asignacionesRes,
+    sesionesRes,
+  ] = await Promise.all([
+    supabase.from("clientes").select("*").eq("activo", true).order("nombre"),
+    supabase.from("proyectos").select("*").eq("activo", true).order("nombre"),
+    supabase
+      .from("personas")
+      .select("id, nombre")
+      .eq("activo", true)
+      .order("nombre"),
+    consultaTarjetas.order("posicion").order("creada_en"),
+    supabase.from("tarjeta_asignaciones").select("*"),
+    supabase
+      .from("cronometros")
+      .select("*")
+      .eq("persona_id", persona.id)
+      .is("fin", null),
+  ]);
 
   const proyectos = proyectosRes.data ?? [];
 
@@ -87,5 +106,6 @@ export async function cargarTareas(
       ...t,
       asignados: asignadosPorTarjeta.get(t.id) ?? [],
     })),
+    sesiones: sesionesRes.data ?? [],
   };
 }
