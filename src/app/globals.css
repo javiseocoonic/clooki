@@ -44,6 +44,15 @@
   --aviso: #b45309;
   --aviso-suave: #fffbeb;
 
+  /* Wordle (fase Cuco): fichas sólidas de acierto/presente/ausente, con
+     letra blanca. Fijas en ambos temas a propósito: al ser rellenos
+     sólidos lo que importa es el contraste ficha↔letra (constante), no
+     ficha↔fondo de página. Verde y ámbar bien separados; el «no solo
+     color» lo refuerzan las marcas ✓/○ y las etiquetas aria del tablero. */
+  --wc-correcto: #15803d;
+  --wc-presente: #b7791f;
+  --wc-ausente: #52525b;
+
   /* Movimiento */
   --dur-rapido: 120ms;
   --dur-medio: 200ms;
@@ -100,6 +109,9 @@
   --color-error-suave: var(--error-suave);
   --color-aviso: var(--aviso);
   --color-aviso-suave: var(--aviso-suave);
+  --color-wc-correcto: var(--wc-correcto);
+  --color-wc-presente: var(--wc-presente);
+  --color-wc-ausente: var(--wc-ausente);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   /* Poppins es la geométrica de la marca Coonic: solo wordmark y títulos.
@@ -128,6 +140,26 @@ body {
 
 .punto-pulso {
   animation: pulso 1.6s var(--ease) infinite;
+}
+
+/* Sacudida del Wordle cuando el intento no es válido */
+@keyframes sacudir {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-4px);
+  }
+  40%,
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+.sacudir {
+  animation: sacudir 0.3s var(--ease);
 }
 
 @media (prefers-reduced-motion: reduce) {

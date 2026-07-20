@@ -265,6 +265,9 @@ export function RejillaSemana({
 
     if (ok) {
       if (segundos !== null) avisarGuardadoRef.current?.(proyectoId, tarea);
+      // El panel del Wordle escucha esto para desbloquearse en vivo cuando
+      // se completa el último día de la semana (fase Cuco, W·3).
+      window.dispatchEvent(new CustomEvent("clooki:horas"));
       setGuardadas((prev) => {
         const s = { ...prev };
         if (segundos === null) delete s[k];

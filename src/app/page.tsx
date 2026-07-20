@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cargarMiSemana } from "@/lib/datos/mi-semana";
+import { cargarEstadoWordle } from "@/lib/datos/wordle";
 import {
   esLunesIso,
   etiquetaSemana,
@@ -8,6 +9,7 @@ import {
 } from "@/lib/semana";
 import { RejillaSemana } from "@/componentes/rejilla-semana";
 import { AvisoSemanaIncompleta } from "@/componentes/aviso-semana-incompleta";
+import { Wordle } from "@/componentes/wordle";
 import { Cabecera } from "@/componentes/cabecera";
 import { Logotipo } from "@/componentes/logotipo";
 import {
@@ -27,7 +29,11 @@ export default async function PaginaMiSemana({
   const lunes =
     typeof semana === "string" && esLunesIso(semana) ? semana : lunesHoy;
 
-  const datos = await cargarMiSemana(lunes);
+  const esSemanaActual = lunes === lunesHoy;
+  const [datos, estadoWordle] = await Promise.all([
+    cargarMiSemana(lunes),
+    esSemanaActual ? cargarEstadoWordle() : Promise.resolve(null),
+  ]);
 
   if (!datos) {
     return (
@@ -119,6 +125,14 @@ export default async function PaginaMiSemana({
           horas={datos.horas}
           misTarjetas={datos.misTarjetas}
         />
+
+        {/* Wordle: solo en la semana actual (el juego es siempre de la
+            semana en curso; verlo desde una semana pasada confundiría). */}
+        {esSemanaActual && (
+          <div className="mx-auto mt-6 w-full max-w-md">
+            <Wordle inicial={estadoWordle} />
+          </div>
+        )}
       </main>
     </div>
     </ProveedorCronometros>
