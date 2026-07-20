@@ -60,7 +60,7 @@ export function GeneradorToken({
         className="self-start rounded-lg bg-marca-accion px-4 py-2.5 text-sm font-semibold text-sobre-marca transition-colors hover:bg-marca-accion-fuerte focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-50"
       >
         {pendiente ? (
-          <Cargador texto="Generando…" tamano="size-4" />
+          <Cargador texto="Generando…" tamano="size-6" />
         ) : yaExiste ? (
           "Regenerar token (revoca el anterior)"
         ) : (

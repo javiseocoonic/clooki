@@ -25,7 +25,7 @@ export function BotonEnvio({
       className={`${className} disabled:opacity-70`}
     >
       {pending ? (
-        <Cargador texto={pendienteTexto} tamano="size-4" />
+        <Cargador texto={pendienteTexto} tamano="size-6" />
       ) : (
         children
       )}

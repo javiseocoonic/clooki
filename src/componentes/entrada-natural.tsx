@@ -87,7 +87,7 @@ export function EntradaNatural({ alAplicar }: Props) {
           className="h-10 shrink-0 rounded-lg border border-borde-fuerte px-3 text-sm font-medium text-texto transition-colors hover:border-acento hover:text-acento focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
         >
           {cargando ? (
-            <Cargador texto="Interpretando…" tamano="size-4" />
+            <Cargador texto="Interpretando…" tamano="size-6" />
           ) : (
             "Proponer"
           )}
@@ -163,7 +163,7 @@ export function EntradaNatural({ alAplicar }: Props) {
                 className="rounded-lg bg-marca-accion px-3 py-2 text-sm font-semibold text-sobre-marca transition-colors hover:bg-marca-accion-fuerte focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
               >
                 {aplicando ? (
-                  <Cargador texto="Apuntando…" tamano="size-4" />
+                  <Cargador texto="Apuntando…" tamano="size-6" />
                 ) : (
                   `Apuntar ${marcadas.size} celda${marcadas.size === 1 ? "" : "s"}`
                 )}

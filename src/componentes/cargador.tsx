@@ -7,7 +7,7 @@ import { Cuco } from "./cuco";
 
 export function Cargador({
   texto,
-  tamano = "size-5",
+  tamano = "size-6",
   className = "",
 }: {
   /** Texto visible junto al cuco (p. ej. «Añadiendo…»). Opcional. */

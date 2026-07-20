@@ -167,20 +167,20 @@ body {
 @keyframes cuco-volar {
   0%,
   100% {
-    transform: translateY(0) rotate(-3deg);
+    transform: translateY(2px) rotate(-7deg);
   }
   50% {
-    transform: translateY(-2px) rotate(3deg);
+    transform: translateY(-4px) rotate(7deg);
   }
 }
 
 @keyframes cuco-aletear {
   0%,
   100% {
-    transform: rotate(0deg);
+    transform: rotate(4deg);
   }
   50% {
-    transform: rotate(-22deg);
+    transform: rotate(-30deg);
   }
 }
 
