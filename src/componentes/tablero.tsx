@@ -280,6 +280,40 @@ export function Tablero({
   const [personaFiltro, setPersonaFiltro] = useState("");
   const arrastrandoRef = useRef<string | null>(null);
 
+  // Paneo con el ratón: clic y arrastre en el fondo del tablero mueve el
+  // scroll horizontal (escritorio; el móvil ya tiene el selector de
+  // cliente y desplaza con el dedo de forma nativa). No debe robar el
+  // arrastre HTML5 de las tarjetas ni el clic normal de los controles.
+  const tableroRef = useRef<HTMLDivElement>(null);
+  const paneoRef = useRef<{ x: number; scrollLeft: number } | null>(null);
+  const [paneando, setPaneando] = useState(false);
+
+  function alPulsarTablero(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    const objetivo = e.target as HTMLElement;
+    if (objetivo.closest('button, a, input, select, textarea, [draggable="true"]'))
+      return;
+    const contenedor = tableroRef.current;
+    if (!contenedor) return;
+    paneoRef.current = { x: e.clientX, scrollLeft: contenedor.scrollLeft };
+    setPaneando(true);
+    contenedor.setPointerCapture(e.pointerId);
+  }
+
+  function alMoverTablero(e: React.PointerEvent<HTMLDivElement>) {
+    const inicio = paneoRef.current;
+    const contenedor = tableroRef.current;
+    if (!inicio || !contenedor) return;
+    contenedor.scrollLeft = inicio.scrollLeft - (e.clientX - inicio.x);
+  }
+
+  function alSoltarTablero(e: React.PointerEvent<HTMLDivElement>) {
+    if (!paneoRef.current) return;
+    paneoRef.current = null;
+    setPaneando(false);
+    tableroRef.current?.releasePointerCapture(e.pointerId);
+  }
+
   const filtroActivo = soloMias || equipoFiltro !== "" || personaFiltro !== "";
 
   const proyectoACliente = useMemo(() => {
@@ -1095,7 +1129,16 @@ export function Tablero({
               : "Aún no hay tarjetas. Crea la primera con «Nueva tarjeta»."}
         </div>
       ) : (
-        <div className="flex flex-1 gap-4 overflow-x-auto pb-4">
+        <div
+          ref={tableroRef}
+          onPointerDown={alPulsarTablero}
+          onPointerMove={alMoverTablero}
+          onPointerUp={alSoltarTablero}
+          onPointerCancel={alSoltarTablero}
+          className={`flex flex-1 gap-4 overflow-x-auto pb-4 sm:cursor-grab ${
+            paneando ? "sm:cursor-grabbing sm:select-none" : ""
+          }`}
+        >
           {columnas.map((c) => columna(c))}
         </div>
       )}
