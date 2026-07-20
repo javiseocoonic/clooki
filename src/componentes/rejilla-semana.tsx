@@ -179,6 +179,16 @@ export function RejillaSemana({
     const s = sesionPorLinea.get(idLinea(proyectoId, tarea));
     return s && s.dia_atribuido === fecha ? s : undefined;
   }
+
+  /**
+   * ¿La fecha es posterior a hoy? No se apuntan horas de días futuros
+   * (candado de la fase Cuco; el trigger de la BD es la garantía real,
+   * esto es la experiencia). Con `hoy` aún desconocido —servidor e
+   * hidratación— no se bloquea nada: las celdas se activan al hidratar.
+   */
+  function esFutura(fecha: string): boolean {
+    return hoy !== null && fecha > hoy;
+  }
   const [diaMovilElegido, setDiaMovilElegido] = useState<string | null>(null);
   const diaMovil =
     diaMovilElegido ?? (hoy && dias.includes(hoy) ? hoy : dias[0]);
@@ -444,8 +454,8 @@ export function RejillaSemana({
       const idxDia = indicesVisibles[desde + i];
       if (idxDia === undefined) return; // sobrantes: se ignoran
       const fecha = dias[idxDia];
-      if (sesionEnCelda(linea.id, linea.tarea, fecha)) {
-        omitidas++; // no se pisa una celda con cronómetro en marcha
+      if (sesionEnCelda(linea.id, linea.tarea, fecha) || esFutura(fecha)) {
+        omitidas++; // cronómetro en marcha o día futuro: no se pisa
         return;
       }
       const k = clave(linea.id, linea.tarea, fecha);
@@ -466,7 +476,7 @@ export function RejillaSemana({
       `Pegadas ${guardadasOk} celda${guardadasOk === 1 ? "" : "s"}` +
         (sinGuardar > 0 ? ` · ${sinGuardar} sin guardar` : "") +
         (omitidas > 0
-          ? ` · ${omitidas} omitida${omitidas === 1 ? "" : "s"}: cronómetro en marcha`
+          ? ` · ${omitidas} omitida${omitidas === 1 ? "" : "s"}: cronómetro o día futuro`
           : ""),
       3000,
     );
@@ -481,8 +491,8 @@ export function RejillaSemana({
 
     for (const p of props) {
       const tarea = limpiarTarea(p.tarea);
-      if (sesionEnCelda(p.proyecto_id, tarea, p.fecha)) {
-        omitidas++; // celda con cronómetro en marcha: no se pisa
+      if (sesionEnCelda(p.proyecto_id, tarea, p.fecha) || esFutura(p.fecha)) {
+        omitidas++; // cronómetro en marcha o día futuro: no se pisa
         continue;
       }
 
@@ -557,6 +567,7 @@ export function RejillaSemana({
   // ── Steppers móviles (§13.3): ±15 min ──
 
   function ajustarCelda(linea: LineaSemana, fecha: string, delta: number) {
+    if (esFutura(fecha)) return; // día futuro: no se apunta (candado Cuco)
     const k = clave(linea.id, linea.tarea, fecha);
     const escrito = interpretarDuracion(valoresRef.current[k] ?? "");
     const base =
@@ -891,6 +902,24 @@ export function RejillaSemana({
               : ""}
             +{formatearDuracionMs(duracionMs(sesion, crono.ahora))}
           </span>
+        </div>
+      );
+    }
+
+    // Día futuro: no editable (candado de la fase Cuco). Se pinta como
+    // hueco tenue con guion, distinto de una celda a cero.
+    if (esFutura(fecha)) {
+      return (
+        <div
+          tabIndex={-1}
+          aria-disabled="true"
+          title="No se pueden apuntar horas de días futuros."
+          aria-label={`${nombreLinea}, ${NOMBRES_DIA[idxDia]} ${etiquetaDia(fecha)}: día futuro, no editable`}
+          className={`flex w-full cursor-not-allowed items-center justify-center rounded-md border border-dashed border-borde bg-superficie-2/40 text-texto-suave ${
+            enTabla ? "h-10 text-[15px]" : "h-11 text-base"
+          }`}
+        >
+          <span aria-hidden="true">—</span>
         </div>
       );
     }
@@ -1388,8 +1417,9 @@ export function RejillaSemana({
                         )}
                       </div>
                       {botonesLinea(linea)}
-                      {crono &&
-                      sesionEnCelda(linea.id, linea.tarea, diaMovil) ? (
+                      {(crono &&
+                        sesionEnCelda(linea.id, linea.tarea, diaMovil)) ||
+                      esFutura(diaMovil) ? (
                         <div className="w-36 shrink-0">
                           {celdaInput(linea, diaMovil)}
                         </div>

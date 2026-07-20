@@ -170,6 +170,8 @@ REGLAS:
   añade un aviso breve explicándolo (con los candidatos si los hay).
 - sumar=true solo si el usuario dice añadir/sumar/más sobre lo que ya hay;
   en caso contrario sumar=false (fijar el valor de la celda).
+- No se pueden apuntar horas de días FUTUROS (posteriores a hoy): si el
+  usuario pide una fecha por delante de hoy, NO la propongas y añade un aviso.
 - Nunca inventes clientes, proyectos, tareas ni cantidades no mencionadas.`;
 
   const anthropic = new Anthropic();
@@ -229,6 +231,13 @@ REGLAS:
     }
     if (!p.fecha || !esFechaIso(p.fecha)) {
       avisos.push(`Se descartó una propuesta con fecha inválida (${proyecto.nombre}).`);
+      continue;
+    }
+    // Candado de futuro (fase Cuco): nunca se apunta por delante de hoy.
+    if (p.fecha > hoy) {
+      avisos.push(
+        `Se descartó ${proyecto.nombre}: no se pueden apuntar horas de días futuros (${p.fecha}).`,
+      );
       continue;
     }
     const distancia = Math.abs(new Date(p.fecha).getTime() - new Date(hoy).getTime());

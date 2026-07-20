@@ -151,6 +151,10 @@ async function ejecutarHerramienta(
     const fecha = typeof args.fecha === "string" ? args.fecha : hoyMadrid();
     if (!ES_FECHA.test(fecha))
       throw new ErrorHerramienta("Fecha inválida: usa YYYY-MM-DD");
+    // Candado de futuro (fase Cuco): el trigger de la BD lo garantiza,
+    // pero aquí el mensaje llega limpio a la IA sin tocar la BD.
+    if (fecha > hoyMadrid())
+      throw new ErrorHerramienta("No se pueden apuntar horas de días futuros.");
     if (!Number.isFinite(horas))
       throw new ErrorHerramienta("Horas inválidas");
 
