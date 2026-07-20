@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
 import {
   interpretarFrase,
   type PropuestaHoras,
@@ -17,10 +18,56 @@ function etiquetaFecha(iso: string): string {
   return `${NOMBRES_DIA[(d.getDay() + 6) % 7]} ${d.getDate()}/${d.getMonth() + 1}`;
 }
 
+/**
+ * Input + botón del formulario. Va en componente propio porque el estado
+ * "en vuelo" sale de useFormStatus (solo funciona DENTRO del <form>): los
+ * setState dentro de una action son parte de la transición y React no los
+ * pinta hasta que acaba — un useState "cargando" nunca llega a verse.
+ */
+function CamposFrase({
+  texto,
+  onTexto,
+}: {
+  texto: string;
+  onTexto: (v: string) => void;
+}) {
+  const { pending } = useFormStatus();
+  return (
+    <>
+      <label className="sr-only" htmlFor="frase-horas">
+        Apuntar horas con una frase
+      </label>
+      <input
+        id="frase-horas"
+        type="text"
+        value={texto}
+        onChange={(e) => onTexto(e.target.value)}
+        maxLength={500}
+        readOnly={pending}
+        aria-busy={pending}
+        placeholder="Apunta con una frase: «ayer 3h en Viamed rrss y 2 en Fesempla prensa»"
+        className={`h-10 min-w-0 flex-1 rounded-lg border border-borde bg-superficie px-3 text-sm text-tinta outline-none placeholder:text-texto-suave focus:border-acento focus:ring-2 focus:ring-acento/20 ${
+          pending ? "opacity-60" : ""
+        }`}
+      />
+      <button
+        type="submit"
+        disabled={pending || texto.trim().length < 3}
+        className="h-10 shrink-0 rounded-lg border border-borde-fuerte px-3 text-sm font-medium text-texto transition-colors hover:border-acento hover:text-acento focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
+      >
+        {pending ? (
+          <Cargador texto="Interpretando…" tamano="size-6" />
+        ) : (
+          "Proponer"
+        )}
+      </button>
+    </>
+  );
+}
+
 /** Entrada por lenguaje natural (fase IA·3): la IA propone, tú confirmas. */
 export function EntradaNatural({ alAplicar }: Props) {
   const [texto, setTexto] = useState("");
-  const [cargando, setCargando] = useState(false);
   const [aplicando, setAplicando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [avisos, setAvisos] = useState<string[]>([]);
@@ -28,12 +75,10 @@ export function EntradaNatural({ alAplicar }: Props) {
   const [marcadas, setMarcadas] = useState<Set<number>>(new Set());
 
   async function proponer() {
-    if (cargando || texto.trim().length < 3) return;
-    setCargando(true);
+    if (texto.trim().length < 3) return;
     setError(null);
     setPropuestas(null);
     const resultado = await interpretarFrase(texto);
-    setCargando(false);
     if (resultado.error) {
       setError(resultado.error);
       return;
@@ -69,29 +114,7 @@ export function EntradaNatural({ alAplicar }: Props) {
           if (e.key === "Escape") limpiar();
         }}
       >
-        <label className="sr-only" htmlFor="frase-horas">
-          Apuntar horas con una frase
-        </label>
-        <input
-          id="frase-horas"
-          type="text"
-          value={texto}
-          onChange={(e) => setTexto(e.target.value)}
-          maxLength={500}
-          placeholder="Apunta con una frase: «ayer 3h en Viamed rrss y 2 en Fesempla prensa»"
-          className="h-10 min-w-0 flex-1 rounded-lg border border-borde bg-superficie px-3 text-sm text-tinta outline-none placeholder:text-texto-suave focus:border-acento focus:ring-2 focus:ring-acento/20"
-        />
-        <button
-          type="submit"
-          disabled={cargando || texto.trim().length < 3}
-          className="h-10 shrink-0 rounded-lg border border-borde-fuerte px-3 text-sm font-medium text-texto transition-colors hover:border-acento hover:text-acento focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
-        >
-          {cargando ? (
-            <Cargador texto="Interpretando…" tamano="size-6" />
-          ) : (
-            "Proponer"
-          )}
-        </button>
+        <CamposFrase texto={texto} onTexto={setTexto} />
       </form>
 
       {error && (
