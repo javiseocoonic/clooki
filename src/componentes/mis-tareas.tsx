@@ -41,7 +41,9 @@ export function MisTareas({
   const [abierto, setAbierto] = useState(false);
   const [anuncio, setAnuncio] = useState("");
   const tarjetasRef = useRef(tarjetas);
-  tarjetasRef.current = tarjetas;
+  useEffect(() => {
+    tarjetasRef.current = tarjetas;
+  });
 
   const porProyecto = useMemo(() => {
     const m = new Map<string, { proyecto: Proyecto; cliente: Cliente }>();
@@ -114,7 +116,9 @@ export function MisTareas({
   }
 
   const alRegistrarRef = useRef(alRegistrarTiempo);
-  alRegistrarRef.current = alRegistrarTiempo;
+  useEffect(() => {
+    alRegistrarRef.current = alRegistrarTiempo;
+  });
 
   useEffect(() => {
     conectarGuardado((proyectoId, tarea) =>
