@@ -46,3 +46,7 @@ scripts/usuarios.csv
 
 # Config local de Claude Code (rutas absolutas de cada máquina)
 .claude/
+
+# Capturas de pantalla sueltas
+Captura de pantalla*.png
+*.screenshot.png
