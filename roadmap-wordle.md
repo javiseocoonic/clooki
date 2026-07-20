@@ -133,15 +133,16 @@ más código que el ranking. Migración siempre antes que el front.
 
 ---
 
-## 6) Dudas abiertas (ninguna bloquea W·1)
+## 6) Decisiones del cliente (20 jul 2026) y dudas que quedan
 
-1. **¿Palabras temáticas de agencia de vez en cuando?** (BRIEF, PAUTA,
-   LOGOS…) Gracia extra vs. más fáciles de adivinar entre compañeros.
-2. **¿«Copiar resultado» comparte a algún sitio?** v1: portapapeles y
-   listo (los cuadraditos de colores de toda la vida).
-3. **Meses de 4 vs 5 semanas**: la media ya lo neutraliza; revisar con
-   el primer mes real si el mínimo de 2 semanas jugadas se queda corto
-   o largo.
-4. **¿Qué ve quien entra a mitad de mes** (alta nueva)? Propuesta: juega
-   desde su primera semana completa; si no llega al mínimo, aparece en
-   el ranking como «fuera de concurso».
+1. **Palabras temáticas de agencia de vez en cuando** (BRIEF, PAUTA,
+   LOGOS…): **sí**, pero de dificultad **media-alta** — no tan obvias que
+   se adivinen entre compañeros. Van en la lista de respuestas curada.
+2. **«Copiar resultado»**: **sí**, al portapapeles — los cuadraditos de
+   colores de toda la vida, sin compartir a ningún servicio externo.
+3. **Alta a mitad de mes**: **ok** — juega desde su primera semana
+   completa; si no llega al mínimo de 2 semanas, sale en el ranking como
+   «fuera de concurso».
+4. **Sigue abierta — meses de 4 vs 5 semanas**: la media ya lo neutraliza;
+   revisar con el primer mes real si el mínimo de 2 semanas jugadas se
+   queda corto o largo.
