@@ -6,8 +6,10 @@ import {
   BandejaCronometros,
   ProveedorCronometros,
 } from "@/componentes/cronometros";
+import { EQUIPOS, NOMBRE_EQUIPO } from "@/lib/equipos";
 import {
   alternarActivo,
+  alternarEquipo,
   alternarRol,
   crearClienteConProyectos,
   crearPersona,
@@ -22,6 +24,51 @@ const ESTILO_BOTON_PRIMARIO =
   "h-10 rounded-lg bg-marca-accion px-3 text-sm font-semibold text-sobre-marca transition-colors hover:bg-marca-accion-fuerte focus-visible:outline-2 focus-visible:outline-acento";
 const ESTILO_BOTON_SUAVE =
   "rounded-md px-2 py-1 text-xs font-medium text-texto-suave transition-colors hover:bg-superficie-2 hover:text-tinta focus-visible:outline-2 focus-visible:outline-acento";
+
+/**
+ * Chips de equipos de trabajo de una persona: pulsar alterna la
+ * pertenencia (alimenta el filtro por equipo del tablero /tareas).
+ */
+function ChipsEquipos({
+  personaId,
+  nombre,
+  equipos,
+}: {
+  personaId: string;
+  nombre: string;
+  equipos: Set<string>;
+}) {
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {EQUIPOS.map((e) => {
+        const dentro = equipos.has(e);
+        return (
+          <form key={e} action={alternarEquipo}>
+            <input type="hidden" name="persona_id" value={personaId} />
+            <input type="hidden" name="equipo" value={e} />
+            <input type="hidden" name="poner" value={dentro ? "0" : "1"} />
+            <button
+              type="submit"
+              aria-pressed={dentro}
+              title={
+                dentro
+                  ? `Quitar a ${nombre} de ${NOMBRE_EQUIPO[e]}`
+                  : `Añadir a ${nombre} a ${NOMBRE_EQUIPO[e]}`
+              }
+              className={`rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-acento ${
+                dentro
+                  ? "border-acento bg-acento-suave text-acento"
+                  : "border-borde text-texto-suave hover:border-borde-fuerte hover:text-tinta"
+              }`}
+            >
+              {NOMBRE_EQUIPO[e]}
+            </button>
+          </form>
+        );
+      })}
+    </div>
+  );
+}
 
 function BotonArchivar({
   tabla,
@@ -65,6 +112,13 @@ export default async function PaginaGestion({
     ...clientes.filter((c) => c.nombre !== CLIENTE_INTERNO),
     ...clientes.filter((c) => c.nombre === CLIENTE_INTERNO),
   ];
+
+  const equiposPorPersona = new Map<string, Set<string>>();
+  for (const pe of datos.equiposPersonas) {
+    const s = equiposPorPersona.get(pe.persona_id);
+    if (s) s.add(pe.equipo);
+    else equiposPorPersona.set(pe.persona_id, new Set([pe.equipo]));
+  }
 
   return (
     <ProveedorCronometros
@@ -261,42 +315,48 @@ export default async function PaginaGestion({
 
               <ul>
                 {personas.map((p) => (
-                  <li
-                    key={p.id}
-                    className="flex items-center gap-2 border-t border-borde py-2"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <span
-                        className={`block truncate text-sm font-medium ${
-                          p.activo ? "text-tinta" : "text-texto-suave line-through"
-                        }`}
-                      >
-                        {p.nombre}
-                      </span>
-                      <span className="block truncate text-xs text-texto-suave">
-                        {p.email}
-                      </span>
+                  <li key={p.id} className="border-t border-borde py-2">
+                    <div className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <span
+                          className={`block truncate text-sm font-medium ${
+                            p.activo ? "text-tinta" : "text-texto-suave line-through"
+                          }`}
+                        >
+                          {p.nombre}
+                        </span>
+                        <span className="block truncate text-xs text-texto-suave">
+                          {p.email}
+                        </span>
+                      </div>
+                      {p.rol === "admin" && (
+                        <span className="rounded-md bg-acento-suave px-1.5 py-0.5 text-xs font-medium text-acento">
+                          admin
+                        </span>
+                      )}
+                      {p.id !== datos.persona.id && (
+                        <>
+                          <form action={alternarRol}>
+                            <input type="hidden" name="id" value={p.id} />
+                            <input
+                              type="hidden"
+                              name="rol"
+                              value={p.rol === "admin" ? "miembro" : "admin"}
+                            />
+                            <button type="submit" className={ESTILO_BOTON_SUAVE}>
+                              {p.rol === "admin" ? "Hacer miembro" : "Hacer admin"}
+                            </button>
+                          </form>
+                          <BotonArchivar tabla="personas" id={p.id} activo={p.activo} />
+                        </>
+                      )}
                     </div>
-                    {p.rol === "admin" && (
-                      <span className="rounded-md bg-acento-suave px-1.5 py-0.5 text-xs font-medium text-acento">
-                        admin
-                      </span>
-                    )}
-                    {p.id !== datos.persona.id && (
-                      <>
-                        <form action={alternarRol}>
-                          <input type="hidden" name="id" value={p.id} />
-                          <input
-                            type="hidden"
-                            name="rol"
-                            value={p.rol === "admin" ? "miembro" : "admin"}
-                          />
-                          <button type="submit" className={ESTILO_BOTON_SUAVE}>
-                            {p.rol === "admin" ? "Hacer miembro" : "Hacer admin"}
-                          </button>
-                        </form>
-                        <BotonArchivar tabla="personas" id={p.id} activo={p.activo} />
-                      </>
+                    {p.activo && (
+                      <ChipsEquipos
+                        personaId={p.id}
+                        nombre={p.nombre}
+                        equipos={equiposPorPersona.get(p.id) ?? new Set()}
+                      />
                     )}
                   </li>
                 ))}

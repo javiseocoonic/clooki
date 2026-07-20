@@ -9,12 +9,15 @@
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { crearClienteNavegador } from "@/lib/supabase/navegador";
+import { EQUIPOS, NOMBRE_EQUIPO } from "@/lib/equipos";
 import { BuscadorCliente } from "./buscador-cliente";
 import type { TarjetaTablero } from "@/lib/datos/tareas";
 import type {
   Cliente,
+  Equipo,
   EstadoTarjeta,
   Persona,
+  PersonaEquipo,
   Proyecto,
 } from "@/lib/tipos";
 
@@ -43,6 +46,9 @@ const CHIP_ESTADO: Record<EstadoTarjeta, string> = {
 
 const BOTON_ICONO =
   "flex h-10 w-10 items-center justify-center rounded-lg text-texto-suave transition-colors hover:bg-superficie-2 hover:text-tinta focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-30";
+
+const SELECT_FILTRO =
+  "h-9 rounded-lg border border-borde bg-superficie px-2 text-sm text-texto outline-none focus:border-acento focus:ring-2 focus:ring-acento/20";
 
 function iniciales(nombre: string): string {
   const partes = nombre.trim().split(/\s+/);
@@ -241,6 +247,7 @@ export function Tablero({
   esAdmin,
   clientes,
   equipo,
+  equiposPersonas,
   tarjetasIniciales,
   verArchivadas,
 }: {
@@ -248,6 +255,8 @@ export function Tablero({
   esAdmin: boolean;
   clientes: ClienteConProyectos[];
   equipo: MiembroEquipo[];
+  /** Pertenencia a equipos de trabajo (alimenta el filtro por equipo). */
+  equiposPersonas: PersonaEquipo[];
   tarjetasIniciales: TarjetaTablero[];
   verArchivadas: boolean;
 }) {
@@ -262,10 +271,16 @@ export function Tablero({
   const [hechasAbiertas, setHechasAbiertas] = useState<Set<string>>(new Set());
   const [clienteMovil, setClienteMovil] = useState<string | null>(null);
   // Vista «Mías»: solo tarjetas asignadas a ti (y las columnas quedan en
-  // consecuencia). En esta vista NO se reordena: mover relativo a una
-  // lista con huecos escribiría posiciones confusas para el resto.
+  // consecuencia). Se compone con dos filtros más: por equipo de trabajo
+  // (todo el mundo) y por persona (solo admin). Con CUALQUIER filtro
+  // activo NO se reordena: mover relativo a una lista con huecos
+  // escribiría posiciones confusas para el resto.
   const [soloMias, setSoloMias] = useState(false);
+  const [equipoFiltro, setEquipoFiltro] = useState<Equipo | "">("");
+  const [personaFiltro, setPersonaFiltro] = useState("");
   const arrastrandoRef = useRef<string | null>(null);
+
+  const filtroActivo = soloMias || equipoFiltro !== "" || personaFiltro !== "";
 
   const proyectoACliente = useMemo(() => {
     const m = new Map<string, ClienteConProyectos>();
@@ -284,12 +299,36 @@ export function Tablero({
     [equipo],
   );
 
+  // Miembros del equipo de trabajo elegido; null = sin filtro de equipo.
+  const miembrosEquipoFiltro = useMemo(() => {
+    if (equipoFiltro === "") return null;
+    return new Set(
+      equiposPersonas
+        .filter((pe) => pe.equipo === equipoFiltro)
+        .map((pe) => pe.persona_id),
+    );
+  }, [equiposPersonas, equipoFiltro]);
+
+  // Una tarjeta «es» de un equipo si alguna persona asignada pertenece;
+  // el backlog (sin asignar) solo aparece sin filtros de gente.
   const tarjetasVista = useMemo(
     () =>
-      soloMias
-        ? tarjetas.filter((t) => t.asignados.includes(personaId))
-        : tarjetas,
-    [tarjetas, soloMias, personaId],
+      tarjetas.filter((t) => {
+        if (soloMias && !t.asignados.includes(personaId)) return false;
+        if (personaFiltro !== "" && !t.asignados.includes(personaFiltro))
+          return false;
+        if (
+          miembrosEquipoFiltro !== null &&
+          !t.asignados.some((id) => miembrosEquipoFiltro.has(id))
+        )
+          return false;
+        return true;
+      }),
+    [tarjetas, soloMias, personaId, personaFiltro, miembrosEquipoFiltro],
+  );
+  const idsEnVista = useMemo(
+    () => new Set(tarjetasVista.map((t) => t.id)),
+    [tarjetasVista],
   );
   const nMias = useMemo(
     () => tarjetas.filter((t) => t.asignados.includes(personaId)).length,
@@ -658,7 +697,7 @@ export function Tablero({
     return (
       <li
         key={t.id}
-        draggable={!soloMias}
+        draggable={!filtroActivo}
         onDragStart={(e) => {
           arrastrandoRef.current = t.id;
           e.dataTransfer.effectAllowed = "move";
@@ -738,7 +777,7 @@ export function Tablero({
             {ETIQUETA_ESTADO[t.estado]}
           </button>
           <span className="ml-auto flex items-center">
-            {t.estado !== "hecha" && !soloMias && (
+            {t.estado !== "hecha" && !filtroActivo && (
               <>
                 <button
                   type="button"
@@ -830,8 +869,7 @@ export function Tablero({
   function columna(c: ClienteConProyectos) {
     // La vista filtra lo que se pinta; la aritmética de posiciones
     // (colocar/mover) sigue trabajando sobre la columna completa.
-    const enVista = (t: TarjetaTablero) =>
-      !soloMias || t.asignados.includes(personaId);
+    const enVista = (t: TarjetaTablero) => idsEnVista.has(t.id);
     const visibles = visiblesOrdenadas(c.id).filter(enVista);
     const hechas = tarjetasDe(c.id)
       .filter((t) => t.estado === "hecha" && enVista(t))
@@ -967,6 +1005,42 @@ export function Tablero({
             Mías{nMias > 0 ? ` (${nMias})` : ""}
           </button>
         </div>
+        <label className="sr-only" htmlFor="filtro-equipo">
+          Filtrar por equipo de trabajo
+        </label>
+        <select
+          id="filtro-equipo"
+          value={equipoFiltro}
+          onChange={(e) => setEquipoFiltro(e.target.value as Equipo | "")}
+          className={SELECT_FILTRO}
+        >
+          <option value="">Todos los equipos</option>
+          {EQUIPOS.map((e) => (
+            <option key={e} value={e}>
+              {NOMBRE_EQUIPO[e]}
+            </option>
+          ))}
+        </select>
+        {esAdmin && (
+          <>
+            <label className="sr-only" htmlFor="filtro-persona">
+              Filtrar por persona
+            </label>
+            <select
+              id="filtro-persona"
+              value={personaFiltro}
+              onChange={(e) => setPersonaFiltro(e.target.value)}
+              className={SELECT_FILTRO}
+            >
+              <option value="">Todas las personas</option>
+              {equipo.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
         <span className="ml-auto flex items-center gap-2">
           <Link
             href={verArchivadas ? "/tareas" : "/tareas?archivadas=1"}
@@ -1016,7 +1090,9 @@ export function Tablero({
         <div className="rounded-xl border border-dashed border-borde p-8 text-center text-sm text-texto-suave">
           {soloMias
             ? "No tienes tarjetas asignadas. Pasa a «Todas» y coge alguna."
-            : "Aún no hay tarjetas. Crea la primera con «Nueva tarjeta»."}
+            : filtroActivo
+              ? "Ninguna tarjeta coincide con el filtro."
+              : "Aún no hay tarjetas. Crea la primera con «Nueva tarjeta»."}
         </div>
       ) : (
         <div className="flex flex-1 gap-4 overflow-x-auto pb-4">

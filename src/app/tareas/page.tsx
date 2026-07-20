@@ -41,6 +41,7 @@ export default async function PaginaTareas({
             esAdmin={persona.rol === "admin"}
             clientes={datos.clientes}
             equipo={datos.equipo}
+            equiposPersonas={datos.equiposPersonas}
             tarjetasIniciales={datos.tarjetas}
             verArchivadas={verArchivadas}
           />

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { esEquipo } from "@/lib/equipos";
 import { crearClienteServidor } from "@/lib/supabase/servidor";
 
 // Las políticas RLS ya garantizan que solo un admin puede escribir en
@@ -82,6 +83,31 @@ export async function alternarActivo(formulario: FormData) {
     .from(tabla as (typeof TABLAS_ARCHIVABLES)[number])
     .update({ activo: activar })
     .eq("id", id);
+  if (error) fallo();
+  revalidatePath("/gestion");
+}
+
+export async function alternarEquipo(formulario: FormData) {
+  const personaId = String(formulario.get("persona_id") ?? "");
+  const equipo = String(formulario.get("equipo") ?? "");
+  const poner = formulario.get("poner") === "1";
+  if (!personaId || !esEquipo(equipo)) fallo();
+
+  const supabase = await crearClienteServidor();
+  // Alta idempotente: si dos pestañas pulsan a la vez, el resultado
+  // (pertenece) es válido — mismo criterio que tarjeta_asignaciones.
+  const { error } = poner
+    ? await supabase
+        .from("persona_equipos")
+        .upsert(
+          { persona_id: personaId, equipo },
+          { onConflict: "persona_id,equipo", ignoreDuplicates: true },
+        )
+    : await supabase
+        .from("persona_equipos")
+        .delete()
+        .eq("persona_id", personaId)
+        .eq("equipo", equipo);
   if (error) fallo();
   revalidatePath("/gestion");
 }
