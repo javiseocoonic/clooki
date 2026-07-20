@@ -92,10 +92,13 @@ wordle_partidas
     colores, actualiza la partida; al terminar devuelve la palabra.
   - La palabra de la semana se elige en servidor en el primer
     `wordle_estado()` que la necesita (insert idempotente).
-- **Listas de palabras como datos del repo** (sin librerías, brief):
-  una lista curada de respuestas (cientos de palabras comunes de 5
-  letras) y un diccionario amplio de intentos válidos. Convención del
-  Wordle español: sin tildes, con Ñ.
+- **Palabras como datos del repo** (sin librerías, brief): un bote
+  curado de respuestas (`wordle_palabras`, ~157 palabras comunes de 5
+  letras; convención española: sin tildes, con Ñ). Los INTENTOS aceptan
+  cualquier palabra bien formada de 5 letras (migración 011): mantener a
+  mano un diccionario español de miles de palabras no es práctico y un
+  bote pequeño rechazaba casi todo. El único coste es sondear con
+  no-palabras — irrelevante en un juego interno.
 - **RLS**: cada uno lee/escribe SOLO su partida — los intentos ajenos
   revelarían la palabra. El ranking sale de una RPC agregada
   (persona, semanas jugadas, media) sin exponer intentos.
