@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { CLIENTE_INTERNO, cargarAdmin } from "@/lib/datos/admin";
+import { BotonEnvio } from "@/componentes/boton-envio";
 import { Cabecera } from "@/componentes/cabecera";
 import {
   BandejaCronometros,
@@ -168,9 +169,12 @@ export default async function PaginaGestion({
                     placeholder="Nuevo cliente"
                     className={`${ESTILO_INPUT} min-w-40 flex-1`}
                   />
-                  <button type="submit" className={ESTILO_BOTON_PRIMARIO}>
+                  <BotonEnvio
+                    className={ESTILO_BOTON_PRIMARIO}
+                    pendienteTexto="Creando…"
+                  >
                     Crear cliente
-                  </button>
+                  </BotonEnvio>
                 </div>
                 <label className="sr-only" htmlFor="nuevo-cliente-proyectos">
                   Proyectos iniciales
@@ -244,12 +248,12 @@ export default async function PaginaGestion({
                                 placeholder="Nuevo proyecto o tarea"
                                 className={`${ESTILO_INPUT} h-9 flex-1`}
                               />
-                              <button
-                                type="submit"
+                              <BotonEnvio
                                 className="h-9 rounded-lg border border-borde-fuerte px-3 text-sm font-medium text-texto transition-colors hover:border-acento hover:text-acento focus-visible:outline-2 focus-visible:outline-acento"
+                                pendienteTexto="Añadiendo…"
                               >
                                 Añadir
-                              </button>
+                              </BotonEnvio>
                             </form>
                           )}
                         </div>
@@ -304,9 +308,12 @@ export default async function PaginaGestion({
                   <option value="miembro">Miembro</option>
                   <option value="admin">Admin</option>
                 </select>
-                <button type="submit" className={ESTILO_BOTON_PRIMARIO}>
+                <BotonEnvio
+                  className={ESTILO_BOTON_PRIMARIO}
+                  pendienteTexto="Añadiendo…"
+                >
                   Añadir
-                </button>
+                </BotonEnvio>
               </form>
               <p className="mb-3 text-xs text-texto-suave">
                 El alta aquí no crea la cuenta de acceso: créala también en

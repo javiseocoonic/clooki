@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { Cargador } from "@/componentes/cargador";
 import { generarToken, type EstadoToken } from "./acciones";
 
 const ESTADO_INICIAL: EstadoToken = { token: null, mensaje: null };
@@ -58,11 +59,13 @@ export function GeneradorToken({
         disabled={pendiente}
         className="self-start rounded-lg bg-marca-accion px-4 py-2.5 text-sm font-semibold text-sobre-marca transition-colors hover:bg-marca-accion-fuerte focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-50"
       >
-        {pendiente
-          ? "Generando…"
-          : yaExiste
-            ? "Regenerar token (revoca el anterior)"
-            : "Generar mi token"}
+        {pendiente ? (
+          <Cargador texto="Generando…" tamano="size-4" />
+        ) : yaExiste ? (
+          "Regenerar token (revoca el anterior)"
+        ) : (
+          "Generar mi token"
+        )}
       </button>
     </form>
   );

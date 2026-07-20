@@ -6,6 +6,7 @@ import {
   type PropuestaHoras,
 } from "@/app/acciones-ia";
 import { NOMBRES_DIA, deIso, formatearDuracion } from "@/lib/semana";
+import { Cargador } from "./cargador";
 
 interface Props {
   alAplicar: (propuestas: PropuestaHoras[]) => Promise<void> | void;
@@ -14,33 +15,6 @@ interface Props {
 function etiquetaFecha(iso: string): string {
   const d = deIso(iso);
   return `${NOMBRES_DIA[(d.getDay() + 6) % 7]} ${d.getDate()}/${d.getMonth() + 1}`;
-}
-
-/** Con prefers-reduced-motion deja de girar; el texto que acompaña da el estado. */
-function Spinner() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      fill="none"
-      className="size-3.5 shrink-0 animate-spin"
-    >
-      <circle
-        cx="8"
-        cy="8"
-        r="6.5"
-        stroke="currentColor"
-        strokeOpacity="0.25"
-        strokeWidth="2"
-      />
-      <path
-        d="M8 1.5a6.5 6.5 0 0 1 6.5 6.5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
 }
 
 /** Entrada por lenguaje natural (fase IA·3): la IA propone, tú confirmas. */
@@ -113,10 +87,7 @@ export function EntradaNatural({ alAplicar }: Props) {
           className="h-10 shrink-0 rounded-lg border border-borde-fuerte px-3 text-sm font-medium text-texto transition-colors hover:border-acento hover:text-acento focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
         >
           {cargando ? (
-            <span className="flex items-center gap-1.5">
-              <Spinner />
-              Interpretando…
-            </span>
+            <Cargador texto="Interpretando…" tamano="size-4" />
           ) : (
             "Proponer"
           )}
@@ -191,9 +162,11 @@ export function EntradaNatural({ alAplicar }: Props) {
                 disabled={marcadas.size === 0 || aplicando}
                 className="rounded-lg bg-marca-accion px-3 py-2 text-sm font-semibold text-sobre-marca transition-colors hover:bg-marca-accion-fuerte focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
               >
-                {aplicando
-                  ? "Apuntando…"
-                  : `Apuntar ${marcadas.size} celda${marcadas.size === 1 ? "" : "s"}`}
+                {aplicando ? (
+                  <Cargador texto="Apuntando…" tamano="size-4" />
+                ) : (
+                  `Apuntar ${marcadas.size} celda${marcadas.size === 1 ? "" : "s"}`
+                )}
               </button>
             )}
             <button

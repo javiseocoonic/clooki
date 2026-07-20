@@ -32,8 +32,9 @@ export function Cuco({
         strokeWidth="2"
         strokeLinecap="round"
       />
-      {/* Ala */}
+      {/* Ala (con clase para que el cargador la haga aletear) */}
       <path
+        className="cuco-ala"
         d="M33 22c1.8.6 3.2 2 3.8 3.8-2 .4-3.8-.2-5-1.6"
         fill="var(--superficie)"
         opacity="0.25"

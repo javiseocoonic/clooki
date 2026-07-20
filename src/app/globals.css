@@ -162,6 +162,38 @@ body {
   animation: sacudir 0.3s var(--ease);
 }
 
+/* Cargador: el cuco «vuela» mientras hay un proceso en marcha.
+   El cuerpo se bambolea y se inclina; el ala aletea sobre su hombro. */
+@keyframes cuco-volar {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(-2px) rotate(3deg);
+  }
+}
+
+@keyframes cuco-aletear {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-22deg);
+  }
+}
+
+.cuco-volando {
+  animation: cuco-volar 0.9s var(--ease) infinite;
+}
+
+.cuco-volando .cuco-ala {
+  transform-box: fill-box;
+  transform-origin: 0% 0%;
+  animation: cuco-aletear 0.45s var(--ease) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
