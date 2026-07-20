@@ -58,6 +58,15 @@ título + persona asignada) conectado a Mi semana vía el botón «Mis tareas»,
 que convierte una tarjeta en línea de la rejilla de un clic. Planteamiento
 completo, decisiones y fases en [`roadmap-tareas.md`](./roadmap-tareas.md).
 
+## Fase Cuco (propuesta 20 jul 2026): humor y Wordle semanal
+
+Completar la semana de registro (L–V) desbloquea el Wordle semanal —
+misma palabra para todo el equipo, ranking mensual por media de intentos
+y desayuno para el mejor. Incluye el candado de días futuros en `horas`
+(prerequisito con valor propio) y al cuco como mascota. Se compite en
+Wordle, nunca en horas. Decisiones y fases en
+[`roadmap-wordle.md`](./roadmap-wordle.md).
+
 ## Fase 2 clásica (sin fecha, tras la fase IA)
 
 Costes por hora y tarifas → rentabilidad real por cliente (el esquema ya
