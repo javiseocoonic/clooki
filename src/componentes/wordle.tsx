@@ -19,8 +19,19 @@ import {
   RANGO_COLOR,
   esLetra,
 } from "@/lib/wordle";
-import type { ColorPista, EstadoWordle } from "@/lib/tipos";
+import type {
+  ColorPista,
+  EstadoWordle,
+  FilaRanking,
+  IntentoWordle,
+} from "@/lib/tipos";
 import { Cuco } from "./cuco";
+
+const CUADRO: Record<ColorPista, string> = {
+  correcto: "🟩",
+  presente: "🟨",
+  ausente: "⬜",
+};
 
 const CLASE_FICHA: Record<ColorPista, string> = {
   correcto: "border-wc-correcto bg-wc-correcto text-white",
@@ -49,7 +60,13 @@ function esEditable(el: Element | null): boolean {
   );
 }
 
-export function Wordle({ inicial }: { inicial: EstadoWordle | null }) {
+export function Wordle({
+  inicial,
+  personaId,
+}: {
+  inicial: EstadoWordle | null;
+  personaId: string;
+}) {
   const supabase = useMemo(() => crearClienteNavegador(), []);
   const [estado, setEstado] = useState<EstadoWordle | null>(inicial);
   const [actual, setActual] = useState("");
@@ -256,8 +273,9 @@ export function Wordle({ inicial }: { inicial: EstadoWordle | null }) {
           {terminada ? (
             <ResultadoFinal
               gano={partida === "ganada"}
-              intentos={usados}
-              palabra={estado?.palabra ?? ""}
+              intentos={intentos}
+              palabra={estado.palabra ?? ""}
+              semana={estado.semana}
             />
           ) : (
             <>
@@ -279,6 +297,8 @@ export function Wordle({ inicial }: { inicial: EstadoWordle | null }) {
           <Leyenda />
         </>
       )}
+
+      <Ranking supabase={supabase} personaId={personaId} />
     </section>
   );
 }
@@ -460,11 +480,36 @@ function ResultadoFinal({
   gano,
   intentos,
   palabra,
+  semana,
 }: {
   gano: boolean;
-  intentos: number;
+  intentos: IntentoWordle[];
   palabra: string;
+  semana: string;
 }) {
+  const [copiado, setCopiado] = useState(false);
+
+  // Cuadraditos para compartir en el chat del equipo (solo al portapapeles,
+  // no se envía a ningún sitio).
+  const textoCompartir = useMemo(() => {
+    const cabecera = `Clooki · Wordle — Semana del ${etiquetaDia(semana)}`;
+    const marcador = `${gano ? intentos.length : "X"}/${MAX_INTENTOS}`;
+    const rejilla = intentos
+      .map((it) => it.pistas.map((p) => CUADRO[p]).join(""))
+      .join("\n");
+    return `${cabecera}\n${marcador}\n${rejilla}`;
+  }, [intentos, gano, semana]);
+
+  async function copiar() {
+    try {
+      await navigator.clipboard.writeText(textoCompartir);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch {
+      setCopiado(false);
+    }
+  }
+
   return (
     <div
       aria-live="polite"
@@ -476,7 +521,7 @@ function ResultadoFinal({
     >
       {gano ? (
         <p className="font-semibold">
-          ¡Bien! Lo sacaste en {intentos}/{MAX_INTENTOS}.
+          ¡Bien! Lo sacaste en {intentos.length}/{MAX_INTENTOS}.
         </p>
       ) : (
         <p>
@@ -487,7 +532,14 @@ function ResultadoFinal({
           .
         </p>
       )}
-      <p className="mt-0.5 text-xs text-texto-suave">
+      <button
+        type="button"
+        onClick={() => void copiar()}
+        className="mt-2 rounded-lg border border-borde-fuerte px-3 py-1.5 text-xs font-medium text-texto transition-colors hover:border-acento hover:text-acento focus-visible:outline-2 focus-visible:outline-acento"
+      >
+        {copiado ? "¡Copiado! ✓" : "Copiar resultado"}
+      </button>
+      <p className="mt-1.5 text-xs text-texto-suave">
         Vuelve el lunes para el próximo.
       </p>
     </div>
@@ -508,6 +560,136 @@ function Leyenda() {
       <span className="flex items-center gap-1">
         <span className="inline-block size-3 rounded-sm bg-wc-ausente" /> no está
       </span>
+    </div>
+  );
+}
+
+function Ranking({
+  supabase,
+  personaId,
+}: {
+  supabase: ReturnType<typeof crearClienteNavegador>;
+  personaId: string;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const [filas, setFilas] = useState<FilaRanking[] | null>(null);
+  const [cargando, setCargando] = useState(false);
+
+  const mes = useMemo(() => {
+    const m = new Intl.DateTimeFormat("es-ES", { month: "long" }).format(
+      new Date(),
+    );
+    return m.charAt(0).toUpperCase() + m.slice(1);
+  }, []);
+
+  async function alternar() {
+    const abrir = !abierto;
+    setAbierto(abrir);
+    if (abrir && filas === null) {
+      setCargando(true);
+      const { data, error } = await supabase.rpc("wordle_ranking", {});
+      setFilas(error || !data ? [] : (data as FilaRanking[]));
+      setCargando(false);
+    }
+  }
+
+  const enConcurso = (filas ?? []).filter((f) => f.en_concurso);
+  const fuera = (filas ?? []).filter((f) => !f.en_concurso);
+
+  return (
+    <div className="mt-3 border-t border-borde pt-3">
+      <button
+        type="button"
+        onClick={() => void alternar()}
+        aria-expanded={abierto}
+        className="flex w-full items-center justify-between rounded-md px-1 py-1 text-sm font-medium text-tinta transition-colors hover:text-acento focus-visible:outline-2 focus-visible:outline-acento"
+      >
+        <span>Ranking de {mes}</span>
+        <span aria-hidden="true" className="text-texto-suave">
+          {abierto ? "▴" : "▾"}
+        </span>
+      </button>
+
+      {abierto && (
+        <div className="mt-2">
+          {cargando ? (
+            <p className="px-2 text-xs text-texto-suave">Cargando…</p>
+          ) : (filas ?? []).length === 0 ? (
+            <p className="px-2 text-xs text-texto-suave">
+              Aún no hay partidas este mes.
+            </p>
+          ) : (
+            <>
+              <ol className="flex flex-col gap-1">
+                {enConcurso.map((f, i) => {
+                  const yo = f.persona_id === personaId;
+                  const lider = i === 0;
+                  return (
+                    <li
+                      key={f.persona_id}
+                      className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${
+                        yo ? "bg-acento-suave" : ""
+                      }`}
+                    >
+                      <span className="w-5 shrink-0 text-center text-xs font-semibold tabular-nums text-texto-suave">
+                        {i + 1}
+                      </span>
+                      {lider && (
+                        <Cuco
+                          animo="feliz"
+                          className="size-6 shrink-0 text-marca"
+                        />
+                      )}
+                      <span className="min-w-0 flex-1 truncate font-medium text-tinta">
+                        {f.nombre}
+                        {yo ? " (tú)" : ""}
+                        {lider ? " 🥐" : ""}
+                      </span>
+                      <span className="shrink-0 text-xs tabular-nums text-texto-suave">
+                        media {f.media.toLocaleString("es-ES")} · {f.semanas} sem.
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+
+              {fuera.length > 0 && (
+                <div className="mt-2">
+                  <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-texto-suave">
+                    Fuera de concurso (menos de 2 semanas)
+                  </p>
+                  <ul className="flex flex-col gap-0.5">
+                    {fuera.map((f) => {
+                      const yo = f.persona_id === personaId;
+                      return (
+                        <li
+                          key={f.persona_id}
+                          className={`flex items-center gap-2 rounded-md px-2 py-1 text-sm text-texto-suave ${
+                            yo ? "bg-acento-suave" : ""
+                          }`}
+                        >
+                          <span className="min-w-0 flex-1 truncate">
+                            {f.nombre}
+                            {yo ? " (tú)" : ""}
+                          </span>
+                          <span className="shrink-0 text-xs tabular-nums">
+                            {f.semanas} sem.
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              <p className="mt-2 px-2 text-[11px] text-texto-suave">
+                Menor media = mejor (intentos por partida; sin acertar cuenta 7).
+                El líder del mes se lleva el desayuno.
+              </p>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -114,7 +114,7 @@ wordle_partidas
 | **W·1 Candado de futuro** | Migración 009 (trigger en `horas`), celdas futuras deshabilitadas, pegado/steppers/IA/MCP con error amable | S — ✅ 20 jul |
 | **W·2 Motor del juego** | Migración 010 (tablas + RLS + RPCs), listas de palabras, elección semanal en servidor | M — ✅ 20 jul |
 | **W·3 El juego en Mi semana** | Panel bloqueado (días que faltan) / desbloqueado, tablero 6×5, teclado en pantalla (móvil), colores accesibles (no solo color), el cuco trae la palabra | L — ✅ 20 jul |
-| **W·4 Ranking y celebración** | RPC agregada, vista del ranking mensual (clave de humor: el cuco y el croissant), «copiar resultado» en cuadraditos para compartir | S/M |
+| **W·4 Ranking y celebración** | RPC agregada, vista del ranking mensual (clave de humor: el cuco y el croissant), «copiar resultado» en cuadraditos para compartir | S/M — ✅ 20 jul |
 
 Orden: W·1 → W·2 → W·3 → W·4. W·1 se puede desplegar ya (valor propio).
 El juego es usable al final de W·3; el desayuno funciona desde W·4 sin

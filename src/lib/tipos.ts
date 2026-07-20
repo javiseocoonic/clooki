@@ -118,6 +118,18 @@ export type EstadoWordle = {
   palabra?: string | null;
 };
 
+/** Una fila del ranking mensual (solo agregados; nunca intentos). */
+export type FilaRanking = {
+  persona_id: string;
+  nombre: string;
+  /** Semanas jugadas (terminadas) del mes. */
+  semanas: number;
+  /** Media de intentos (golf: 1–6 al acertar, 7 al fallar). Menor = mejor. */
+  media: number;
+  /** true = 2+ semanas, compite por el premio; false = fuera de concurso. */
+  en_concurso: boolean;
+};
+
 /** Lo que devuelve wordle_intentar(): intento válido o rechazo sin gastar turno. */
 export type ResultadoIntento =
   | { ok: false; motivo: "formato" | "desconocida" }
@@ -278,6 +290,10 @@ export type Database = {
       wordle_intentar: {
         Args: { p_palabra: string };
         Returns: ResultadoIntento;
+      };
+      wordle_ranking: {
+        Args: { p_mes?: string | null };
+        Returns: FilaRanking[];
       };
     };
     Enums: { rol_persona: Rol };

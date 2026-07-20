@@ -130,7 +130,7 @@ export default async function PaginaMiSemana({
             semana en curso; verlo desde una semana pasada confundiría). */}
         {esSemanaActual && (
           <div className="mx-auto mt-6 w-full max-w-md">
-            <Wordle inicial={estadoWordle} />
+            <Wordle inicial={estadoWordle} personaId={persona.id} />
           </div>
         )}
       </main>
