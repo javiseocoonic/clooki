@@ -58,7 +58,7 @@ export async function crearPersona(formulario: FormData) {
     .trim()
     .toLowerCase();
   const rol = String(formulario.get("rol") ?? "miembro");
-  if (!nombre || !/^[^\s@]+@coonic\.com$/.test(email)) fallo();
+  if (!nombre || !/^[^\s@]+@(coonic\.com|proyectoscoonic\.com)$/.test(email)) fallo();
   if (rol !== "admin" && rol !== "miembro") fallo();
 
   const supabase = await crearClienteServidor();

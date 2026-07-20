@@ -7,7 +7,7 @@ export interface EstadoLogin {
   mensaje: string | null;
 }
 
-const CORREO_COONIC = /^[^\s@]+@coonic\.com$/i;
+const CORREO_COONIC = /^[^\s@]+@(coonic\.com|proyectoscoonic\.com)$/i;
 
 export async function iniciarSesion(
   _estadoAnterior: EstadoLogin,
@@ -19,7 +19,7 @@ export async function iniciarSesion(
   const contrasena = String(formulario.get("contrasena") ?? "");
 
   if (!CORREO_COONIC.test(email)) {
-    return { mensaje: "Usa tu correo @coonic.com." };
+    return { mensaje: "Usa tu correo @coonic.com o @proyectoscoonic.com." };
   }
   if (!contrasena) {
     return { mensaje: "Escribe tu contraseña." };

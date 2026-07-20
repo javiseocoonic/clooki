@@ -31,7 +31,7 @@ Variables de entorno en `.env.local` (ver `.env.example`).
    - `node scripts/crear-usuarios.mjs` — crea los usuarios en Supabase Auth
      (idempotente: re-ejecutar actualiza contraseñas).
    - `usuarios.csv` está en `.gitignore` y no se sube al repositorio.
-3. El acceso está restringido a correos `@coonic.com` en el login; quien no
+3. El acceso está restringido a correos `@coonic.com` o `@proyectoscoonic.com` en el login; quien no
    tenga fila activa en `personas` no ve ningún dato (RLS).
 
 ## Entrada por lenguaje natural (en la app)

@@ -288,7 +288,7 @@ export default async function PaginaGestion({
                   name="email"
                   type="email"
                   required
-                  pattern=".+@coonic\.com"
+                  pattern=".+@(coonic\.com|proyectoscoonic\.com)"
                   placeholder="nombre@coonic.com"
                   className={`${ESTILO_INPUT} min-w-44 flex-1`}
                 />

@@ -25,8 +25,8 @@ export function FormularioLogin() {
         autoFocus
         autoComplete="email"
         placeholder="nombre@coonic.com"
-        pattern=".+@coonic\.com"
-        title="Correo @coonic.com"
+        pattern=".+@(coonic\.com|proyectoscoonic\.com)"
+        title="Correo @coonic.com o @proyectoscoonic.com"
         className="rounded-lg border border-borde-fuerte bg-superficie px-4 py-2.5 text-base text-tinta outline-none focus:border-acento focus:ring-2 focus:ring-acento/20"
       />
 

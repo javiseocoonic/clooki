@@ -55,7 +55,7 @@ Eres el desarrollador backend de **Clooki**, la aplicación interna de registro 
 
 ## Autenticación y permisos
 
-- **Login por magic link** (Supabase Auth, sin contraseñas). Registro restringido al dominio `@coonic.com`.
+- **Login por magic link** (Supabase Auth, sin contraseñas). Registro restringido a los dominios `@coonic.com` y `@proyectoscoonic.com`.
 - Vincular `auth.users` con `personas` por email (o `persona.id = auth.uid()` si se crean juntos).
 
 **Políticas RLS (verificadas a nivel de BD, no solo de UI):**
