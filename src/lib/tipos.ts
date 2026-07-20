@@ -94,6 +94,42 @@ export type TarjetaAsignacion = {
   persona_id: string;
 }
 
+/* ── Wordle semanal (fase Cuco) ── */
+
+export type ColorPista = "correcto" | "presente" | "ausente";
+export type EstadoPartida = "en_curso" | "ganada" | "perdida";
+
+/** Un intento ya jugado: la palabra y el color de cada una de sus 5 letras. */
+export type IntentoWordle = { palabra: string; pistas: ColorPista[] };
+
+/** Lo que devuelve wordle_estado(): bloqueado o partida en marcha/terminada. */
+export type EstadoWordle = {
+  /** Lunes ISO de la semana. */
+  semana: string;
+  desbloqueado: boolean;
+  /** Días L–V con registro (0..5); base del mensaje «te faltan N». */
+  dias_completos: number;
+  max_intentos: number;
+  // Solo si desbloqueado:
+  intentos?: IntentoWordle[];
+  usados?: number;
+  estado?: EstadoPartida;
+  /** Se revela solo con la partida terminada (ganada o agotada). */
+  palabra?: string | null;
+};
+
+/** Lo que devuelve wordle_intentar(): intento válido o rechazo sin gastar turno. */
+export type ResultadoIntento =
+  | { ok: false; motivo: "formato" | "desconocida" }
+  | {
+      ok: true;
+      palabra_intentada: string;
+      pistas: ColorPista[];
+      usados: number;
+      estado: EstadoPartida;
+      palabra: string | null;
+    };
+
 export type ClaveApi = {
   id: string;
   persona_id: string;
@@ -234,6 +270,14 @@ export type Database = {
           p_tarea?: string | null;
         };
         Returns: { accion: string; segundos_total: number; total: number };
+      };
+      wordle_estado: {
+        Args: Record<string, never>;
+        Returns: EstadoWordle;
+      };
+      wordle_intentar: {
+        Args: { p_palabra: string };
+        Returns: ResultadoIntento;
       };
     };
     Enums: { rol_persona: Rol };
