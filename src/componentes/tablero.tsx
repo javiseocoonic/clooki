@@ -7,7 +7,7 @@
 // selector de cliente decide qué columna se ve (nada se renderiza doble).
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { crearClienteNavegador } from "@/lib/supabase/navegador";
 import { EQUIPOS, NOMBRE_EQUIPO } from "@/lib/equipos";
 import { BuscadorCliente } from "./buscador-cliente";
@@ -49,6 +49,34 @@ const BOTON_ICONO =
 
 const SELECT_FILTRO =
   "h-9 rounded-lg border border-borde bg-superficie px-2 text-sm text-texto outline-none focus:border-acento focus:ring-2 focus:ring-acento/20";
+
+const SELECTOR_ENFOCABLE =
+  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+/** Atrapa el Tab dentro de `ref` mientras `activo` (modal de detalle). */
+function useFocoAtrapado(activo: boolean, ref: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    if (!activo) return;
+    const alTeclear = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const nodos = Array.from(
+        ref.current?.querySelectorAll<HTMLElement>(SELECTOR_ENFOCABLE) ?? [],
+      ).filter((n) => !n.hasAttribute("disabled"));
+      if (nodos.length === 0) return;
+      const primero = nodos[0];
+      const ultimo = nodos[nodos.length - 1];
+      if (e.shiftKey && document.activeElement === primero) {
+        e.preventDefault();
+        ultimo.focus();
+      } else if (!e.shiftKey && document.activeElement === ultimo) {
+        e.preventDefault();
+        primero.focus();
+      }
+    };
+    document.addEventListener("keydown", alTeclear);
+    return () => document.removeEventListener("keydown", alTeclear);
+  }, [activo, ref]);
+}
 
 function iniciales(nombre: string): string {
   const partes = nombre.trim().split(/\s+/);
@@ -270,6 +298,10 @@ export function Tablero({
   );
   const [hechasAbiertas, setHechasAbiertas] = useState<Set<string>>(new Set());
   const [clienteMovil, setClienteMovil] = useState<string | null>(null);
+  // Detalle tipo Trello: id de la tarjeta cuyo modal está abierto (evita
+  // tarjetas kilométricas en el tablero cuando la descripción es larga).
+  const [detalle, setDetalle] = useState<string | null>(null);
+  const dialogoRef = useRef<HTMLDivElement>(null);
   // Vista «Mías»: solo tarjetas asignadas a ti (y las columnas quedan en
   // consecuencia). Se compone con dos filtros más: por equipo de trabajo
   // (todo el mundo) y por persona (solo admin). Con CUALQUIER filtro
@@ -332,6 +364,23 @@ export function Tablero({
     () => new Map(equipo.map((p) => [p.id, p.nombre])),
     [equipo],
   );
+
+  // Modal de detalle: foco al abrir, Escape para cerrar, foco devuelto al
+  // disparador al cerrar. El atrapado de Tab vive en useFocoAtrapado.
+  useEffect(() => {
+    if (!detalle) return;
+    const anterior = document.activeElement as HTMLElement | null;
+    dialogoRef.current?.focus();
+    const alTeclear = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDetalle(null);
+    };
+    document.addEventListener("keydown", alTeclear);
+    return () => {
+      document.removeEventListener("keydown", alTeclear);
+      anterior?.focus();
+    };
+  }, [detalle]);
+  useFocoAtrapado(detalle !== null, dialogoRef);
 
   // Miembros del equipo de trabajo elegido; null = sin filtro de equipo.
   const miembrosEquipoFiltro = useMemo(() => {
@@ -761,45 +810,61 @@ export function Tablero({
         }}
         className="flex flex-col gap-2 rounded-lg border border-borde bg-superficie p-3"
       >
-        <div className="flex items-start justify-between gap-1">
-          <span className="min-w-0 break-words text-sm font-semibold text-tinta">
-            {t.titulo}
-          </span>
-          {puedeEditar(t) && (
+        {/* Superficie clicable: abre el detalle (§ modal). El lápiz vive
+            fuera de ella (stopPropagation) porque abre la edición directa;
+            el título es un <button> real para que el detalle también se
+            pueda abrir por teclado — el resto del área es solo conveniencia
+            de ratón (el clic burbujea hasta aquí). */}
+        <div
+          onClick={() => setDetalle(t.id)}
+          className="-m-1 flex cursor-pointer flex-col gap-2 rounded-md p-1"
+        >
+          <div className="flex items-start justify-between gap-1">
             <button
               type="button"
-              onClick={() => setEditando(t.id)}
-              title="Editar tarjeta"
-              aria-label={`Editar «${t.titulo}»`}
-              className={`${BOTON_ICONO} -mr-1.5 -mt-1.5 shrink-0`}
+              className="min-w-0 flex-1 rounded-sm break-words text-left text-sm font-semibold text-tinta focus-visible:outline-2 focus-visible:outline-acento"
             >
-              <svg
-                viewBox="0 0 16 16"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M11.1 2.2 13.8 4.9 5.7 13 2.5 13.5 3 10.3z" />
-              </svg>
+              {t.titulo}
             </button>
+            {puedeEditar(t) && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditando(t.id);
+                }}
+                title="Editar tarjeta"
+                aria-label={`Editar «${t.titulo}»`}
+                className={`${BOTON_ICONO} -mr-1.5 -mt-1.5 shrink-0`}
+              >
+                <svg
+                  viewBox="0 0 16 16"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M11.1 2.2 13.8 4.9 5.7 13 2.5 13.5 3 10.3z" />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-texto-suave">
+              {nombreProyecto.get(t.proyecto_id) ?? "—"}
+            </span>
+            {chipsAsignados(t)}
+          </div>
+
+          {t.descripcion && (
+            <p className="line-clamp-3 text-xs leading-relaxed whitespace-pre-wrap text-texto-suave">
+              {t.descripcion}
+            </p>
           )}
         </div>
-
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-texto-suave">
-            {nombreProyecto.get(t.proyecto_id) ?? "—"}
-          </span>
-          {chipsAsignados(t)}
-        </div>
-
-        {t.descripcion && (
-          <p className="text-xs leading-relaxed text-texto-suave">
-            {t.descripcion}
-          </p>
-        )}
 
         <div className="flex items-center gap-0.5">
           <button
@@ -897,6 +962,117 @@ export function Tablero({
           </div>
         )}
       </li>
+    );
+  }
+
+  /**
+   * Modal de detalle (tipo Trello): descripción completa sin recortar y
+   * acciones rápidas (estado, asignarme). Editar/Borrar cierran el modal y
+   * delegan en los flujos ya existentes de la columna (formulario inline /
+   * confirmación de borrado), sin duplicar esa lógica aquí.
+   */
+  function detalleModal() {
+    const t = tarjetas.find((x) => x.id === detalle);
+    if (!t) return null;
+    const cliente = proyectoACliente.get(t.proyecto_id);
+    const asignadosTexto =
+      t.asignados.length > 0
+        ? t.asignados.map((id) => nombrePersona.get(id) ?? "?").join(", ")
+        : "Sin asignar";
+
+    return (
+      <div
+        className="fixed inset-0 z-20 flex items-center justify-center bg-tinta/40 p-4"
+        onClick={() => setDetalle(null)}
+      >
+        <div
+          ref={dialogoRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="detalle-titulo"
+          tabIndex={-1}
+          onClick={(e) => e.stopPropagation()}
+          className="flex max-h-[85vh] w-full max-w-md flex-col gap-3 overflow-y-auto rounded-xl border border-borde bg-superficie p-4 shadow-lg outline-none"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <h2
+              id="detalle-titulo"
+              className="min-w-0 flex-1 break-words text-base font-semibold text-tinta"
+            >
+              {t.titulo}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setDetalle(null)}
+              aria-label="Cerrar"
+              className={`${BOTON_ICONO} shrink-0`}
+            >
+              ✕
+            </button>
+          </div>
+
+          <p className="text-[11px] font-medium uppercase tracking-wide text-texto-suave">
+            {cliente?.nombre ?? "—"} — {nombreProyecto.get(t.proyecto_id) ?? "—"}
+          </p>
+
+          <p className="text-xs text-texto-suave">
+            <span className="font-medium text-texto">Asignada a: </span>
+            {asignadosTexto}
+          </p>
+
+          {t.descripcion && (
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-texto">
+              {t.descripcion}
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-borde pt-3">
+            <button
+              type="button"
+              onClick={() => void cambiarEstado(t)}
+              title={`Pasar a ${ETIQUETA_ESTADO[SIGUIENTE_ESTADO[t.estado]]}`}
+              className={`h-8 rounded-full px-2.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-acento ${CHIP_ESTADO[t.estado]}`}
+            >
+              {ETIQUETA_ESTADO[t.estado]}
+            </button>
+            <button
+              type="button"
+              onClick={() => void alternarme(t)}
+              className={`h-8 rounded-full px-2.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-acento ${
+                t.asignados.includes(personaId)
+                  ? "text-texto-suave hover:bg-superficie-2 hover:text-tinta"
+                  : "text-acento hover:bg-acento-suave"
+              }`}
+            >
+              {t.asignados.includes(personaId) ? "Salirme" : "La cojo"}
+            </button>
+            {puedeEditar(t) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditando(t.id);
+                  setDetalle(null);
+                }}
+                className="h-8 rounded-full px-2.5 text-xs font-medium text-texto-suave transition-colors hover:bg-superficie-2 hover:text-tinta focus-visible:outline-2 focus-visible:outline-acento"
+              >
+                Editar
+              </button>
+            )}
+            {puedeBorrar(t) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmandoBorrar(t.id);
+                  setDetalle(null);
+                }}
+                className="ml-auto h-8 rounded-full px-2.5 text-xs font-medium text-texto-suave transition-colors hover:bg-error-suave hover:text-error focus-visible:outline-2 focus-visible:outline-acento"
+              >
+                Borrar
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -1142,6 +1318,8 @@ export function Tablero({
           {columnas.map((c) => columna(c))}
         </div>
       )}
+
+      {detalle !== null && detalleModal()}
     </div>
   );
 }
