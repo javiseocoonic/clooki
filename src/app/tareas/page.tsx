@@ -42,6 +42,7 @@ export default async function PaginaTareas({
             clientes={datos.clientes}
             equipo={datos.equipo}
             tarjetasIniciales={datos.tarjetas}
+            checksIniciales={datos.checks}
             verArchivadas={verArchivadas}
           />
         </main>

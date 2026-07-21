@@ -16,6 +16,7 @@ import type {
   EstadoTarjeta,
   Persona,
   Proyecto,
+  TarjetaCheck,
 } from "@/lib/tipos";
 
 type ClienteConProyectos = Cliente & { proyectos: Proyecto[] };
@@ -53,6 +54,44 @@ const CHIP_ESTADO: Record<EstadoTarjeta, string> = {
   en_curso: "bg-acento-suave text-acento",
   hecha: "bg-exito-suave text-exito",
 };
+
+/* ── Fecha de entrega: proximidad → color ── */
+
+type Plazo = "vencida" | "cerca" | "media" | "holgada";
+
+/** Días locales de hoy a `fecha` (YYYY-MM-DD); negativo = vencida. */
+function diasHasta(fecha: string): number {
+  const hoy = new Date();
+  const objetivo = new Date(`${fecha}T00:00:00`);
+  hoy.setHours(0, 0, 0, 0);
+  return Math.round((objetivo.getTime() - hoy.getTime()) / 86_400_000);
+}
+
+function plazoDe(fecha: string): Plazo {
+  const d = diasHasta(fecha);
+  if (d < 0) return "vencida";
+  if (d <= 2) return "cerca";
+  if (d <= 7) return "media";
+  return "holgada";
+}
+
+/** Rojo si vencida o encima, ámbar esta semana, verde con margen. */
+const CHIP_PLAZO: Record<Plazo, string> = {
+  vencida: "bg-error-suave text-error",
+  cerca: "bg-error-suave text-error",
+  media: "bg-aviso-suave text-aviso",
+  holgada: "bg-exito-suave text-exito",
+};
+
+const MES_CORTO = [
+  "ene", "feb", "mar", "abr", "may", "jun",
+  "jul", "ago", "sep", "oct", "nov", "dic",
+];
+
+function etiquetaFechaCorta(fecha: string): string {
+  const d = new Date(`${fecha}T00:00:00`);
+  return `${d.getDate()} ${MES_CORTO[d.getMonth()]}`;
+}
 
 const BOTON_ICONO =
   "flex h-10 w-10 items-center justify-center rounded-lg text-texto-suave transition-colors hover:bg-superficie-2 hover:text-tinta focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-30";
@@ -104,6 +143,9 @@ export interface DatosFormularioTarjeta {
   proyectoId: string;
   descripcion: string;
   asignados: string[];
+  /** `YYYY-MM-DD` de entrega; "" = sin fecha. */
+  fechaLimite: string;
+  urgente: boolean;
 }
 
 function FormularioTarjeta({
@@ -137,6 +179,8 @@ function FormularioTarjeta({
   const [asignados, setAsignados] = useState<Set<string>>(
     () => new Set(inicial?.asignados ?? []),
   );
+  const [fechaLimite, setFechaLimite] = useState(inicial?.fechaLimite ?? "");
+  const [urgente, setUrgente] = useState(inicial?.urgente ?? false);
   const [guardando, setGuardando] = useState(false);
 
   // Tú primero: «para mí» es un toque en tu propio chip.
@@ -157,6 +201,8 @@ function FormularioTarjeta({
       proyectoId,
       descripcion: descripcion.trim(),
       asignados: [...asignados],
+      fechaLimite,
+      urgente,
     });
     if (!cerrado) setGuardando(false);
   }
@@ -223,6 +269,43 @@ function FormularioTarjeta({
         className="rounded-lg border border-borde-fuerte bg-superficie px-2.5 py-1.5 text-sm text-tinta outline-none placeholder:text-texto-suave focus:border-acento focus:ring-2 focus:ring-acento/20"
       />
 
+      <div className="flex flex-wrap items-center gap-2">
+        <label
+          htmlFor="tarjeta-fecha"
+          className="text-[11px] font-medium uppercase tracking-wide text-texto-suave"
+        >
+          Entrega
+        </label>
+        <input
+          id="tarjeta-fecha"
+          type="date"
+          value={fechaLimite}
+          onChange={(e) => setFechaLimite(e.target.value)}
+          className="h-9 rounded-lg border border-borde-fuerte bg-superficie px-2 text-sm text-tinta outline-none focus:border-acento focus:ring-2 focus:ring-acento/20"
+        />
+        {fechaLimite && (
+          <button
+            type="button"
+            onClick={() => setFechaLimite("")}
+            className="text-xs text-texto-suave hover:text-tinta focus-visible:outline-2 focus-visible:outline-acento"
+          >
+            Quitar
+          </button>
+        )}
+        <button
+          type="button"
+          aria-pressed={urgente}
+          onClick={() => setUrgente((u) => !u)}
+          className={`ml-auto h-9 rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-acento ${
+            urgente
+              ? "border-error/40 bg-error-suave text-error"
+              : "border-borde text-texto-suave hover:border-borde-fuerte hover:text-tinta"
+          }`}
+        >
+          ⚑ Urgente
+        </button>
+      </div>
+
       <fieldset>
         <legend className="pb-1 text-[11px] font-medium uppercase tracking-wide text-texto-suave">
           Asignar
@@ -278,6 +361,45 @@ function FormularioTarjeta({
   );
 }
 
+/**
+ * Alta de subtarea del modal de detalle. Estado local a propósito: el
+ * llamador lo re-monta con key={tarjeta.id}, así el texto a medio
+ * escribir no se cuela de una tarjeta a otra.
+ */
+function FormularioNuevoCheck({ alCrear }: { alCrear: (texto: string) => void }) {
+  const [texto, setTexto] = useState("");
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        alCrear(texto);
+        setTexto("");
+      }}
+      className="flex items-center gap-1.5"
+    >
+      <label className="sr-only" htmlFor="nueva-subtarea">
+        Nueva subtarea
+      </label>
+      <input
+        id="nueva-subtarea"
+        type="text"
+        maxLength={200}
+        placeholder="Añadir subtarea…"
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        className="h-8 min-w-0 flex-1 rounded-md border border-borde bg-superficie px-2 text-sm text-tinta outline-none placeholder:text-texto-suave focus:border-acento focus:ring-2 focus:ring-acento/20"
+      />
+      <button
+        type="submit"
+        disabled={texto.trim().length === 0}
+        className="h-8 shrink-0 rounded-md border border-borde-fuerte px-2.5 text-xs font-medium text-texto transition-colors hover:border-acento hover:text-acento focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
+      >
+        Añadir
+      </button>
+    </form>
+  );
+}
+
 /* ── Tablero ───────────────────────────────────────────────────── */
 
 export function Tablero({
@@ -286,6 +408,7 @@ export function Tablero({
   clientes,
   equipo,
   tarjetasIniciales,
+  checksIniciales,
   verArchivadas,
 }: {
   personaId: string;
@@ -293,10 +416,12 @@ export function Tablero({
   clientes: ClienteConProyectos[];
   equipo: MiembroEquipo[];
   tarjetasIniciales: TarjetaTablero[];
+  checksIniciales: TarjetaCheck[];
   verArchivadas: boolean;
 }) {
   const supabase = useMemo(() => crearClienteNavegador(), []);
   const [tarjetas, setTarjetas] = useState(tarjetasIniciales);
+  const [checks, setChecks] = useState(checksIniciales);
   const [anuncio, setAnuncio] = useState("");
   const [creandoEn, setCreandoEn] = useState<string | null>(null);
   const [editando, setEditando] = useState<string | null>(null);
@@ -316,6 +441,7 @@ export function Tablero({
   // escribiría posiciones confusas para el resto.
   const [soloMias, setSoloMias] = useState(false);
   const [tipoFiltro, setTipoFiltro] = useState("");
+  const [estadoFiltro, setEstadoFiltro] = useState<EstadoTarjeta | "">("");
   const [personaFiltro, setPersonaFiltro] = useState("");
   // Buscador de cliente: oculta columnas enteras según se teclea. No
   // entra en filtroActivo: no deja huecos DENTRO de una columna, así
@@ -357,7 +483,8 @@ export function Tablero({
     tableroRef.current?.releasePointerCapture(e.pointerId);
   }
 
-  const filtroActivo = soloMias || tipoFiltro !== "" || personaFiltro !== "";
+  const filtroActivo =
+    soloMias || tipoFiltro !== "" || estadoFiltro !== "" || personaFiltro !== "";
 
   const proyectoACliente = useMemo(() => {
     const m = new Map<string, ClienteConProyectos>();
@@ -422,9 +549,18 @@ export function Tablero({
           return false;
         if (tipoFiltro !== "" && tipoPorProyecto.get(t.proyecto_id) !== tipoFiltro)
           return false;
+        if (estadoFiltro !== "" && t.estado !== estadoFiltro) return false;
         return true;
       }),
-    [tarjetas, soloMias, personaId, personaFiltro, tipoFiltro, tipoPorProyecto],
+    [
+      tarjetas,
+      soloMias,
+      personaId,
+      personaFiltro,
+      tipoFiltro,
+      tipoPorProyecto,
+      estadoFiltro,
+    ],
   );
   const idsEnVista = useMemo(
     () => new Set(tarjetasVista.map((t) => t.id)),
@@ -499,6 +635,8 @@ export function Tablero({
         descripcion: d.descripcion || null,
         creada_por: personaId,
         posicion,
+        fecha_limite: d.fechaLimite || null,
+        urgente: d.urgente,
       })
       .select()
       .single();
@@ -537,6 +675,8 @@ export function Tablero({
         titulo: d.titulo,
         proyecto_id: d.proyectoId,
         descripcion: d.descripcion || null,
+        fecha_limite: d.fechaLimite || null,
+        urgente: d.urgente,
       })
       .eq("id", t.id);
     if (error) {
@@ -581,6 +721,8 @@ export function Tablero({
               titulo: d.titulo,
               proyecto_id: d.proyectoId,
               descripcion: d.descripcion || null,
+              fecha_limite: d.fechaLimite || null,
+              urgente: d.urgente,
               asignados: asignadosFinal,
             }
           : x,
@@ -670,6 +812,64 @@ export function Tablero({
     setTarjetas((prev) => prev.filter((x) => x.id !== t.id));
     setConfirmandoBorrar(null);
     setAnuncio(`Tarjeta «${t.titulo}» borrada.`);
+  }
+
+  /* ── Subtareas (checklist) ── */
+
+  function checksDe(tarjetaId: string): TarjetaCheck[] {
+    return checks
+      .filter((c) => c.tarjeta_id === tarjetaId)
+      .sort((a, b) => a.posicion - b.posicion || a.creada_en.localeCompare(b.creada_en));
+  }
+
+  async function crearCheck(tarjetaId: string, texto: string) {
+    const limpio = texto.trim().slice(0, 200).trim();
+    if (!limpio) return;
+    const previos = checksDe(tarjetaId);
+    const posicion =
+      previos.length > 0
+        ? Math.max(...previos.map((c) => c.posicion)) + SALTO
+        : SALTO;
+    const { data, error } = await supabase
+      .from("tarjeta_checks")
+      .insert({ tarjeta_id: tarjetaId, texto: limpio, posicion })
+      .select()
+      .single();
+    if (error || !data) {
+      setAnuncio("No se pudo añadir la subtarea.");
+      return;
+    }
+    setChecks((prev) => [...prev, data]);
+  }
+
+  /** Cambia campos de un check con actualización optimista y reversión. */
+  async function actualizarCheck(
+    c: TarjetaCheck,
+    cambios: Partial<Pick<TarjetaCheck, "hecho" | "persona_id" | "fecha_limite">>,
+  ) {
+    setChecks((prev) =>
+      prev.map((x) => (x.id === c.id ? { ...x, ...cambios } : x)),
+    );
+    const { error } = await supabase
+      .from("tarjeta_checks")
+      .update(cambios)
+      .eq("id", c.id);
+    if (error) {
+      setChecks((prev) => prev.map((x) => (x.id === c.id ? c : x)));
+      setAnuncio("No se pudo actualizar la subtarea.");
+    }
+  }
+
+  async function borrarCheck(c: TarjetaCheck) {
+    const { error } = await supabase
+      .from("tarjeta_checks")
+      .delete()
+      .eq("id", c.id);
+    if (error) {
+      setAnuncio("No se pudo borrar la subtarea.");
+      return;
+    }
+    setChecks((prev) => prev.filter((x) => x.id !== c.id));
   }
 
   /**
@@ -791,6 +991,8 @@ export function Tablero({
               proyectoId: t.proyecto_id,
               descripcion: t.descripcion ?? "",
               asignados: t.asignados,
+              fechaLimite: t.fecha_limite ?? "",
+              urgente: t.urgente,
             }}
             etiquetaGuardar="Guardar"
             alGuardar={(d) => guardarEdicion(t, d)}
@@ -881,6 +1083,50 @@ export function Tablero({
             </span>
             {chipsAsignados(t)}
           </div>
+
+          {(t.urgente || t.fecha_limite || checksDe(t.id).length > 0) && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {t.urgente && (
+                <span className="rounded-full bg-error-suave px-2 py-0.5 text-[11px] font-semibold text-error">
+                  ⚑ Urgente
+                </span>
+              )}
+              {t.fecha_limite && (
+                <span
+                  title={`Entrega: ${t.fecha_limite}`}
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ${
+                    t.estado === "hecha"
+                      ? "bg-superficie-2 text-texto-suave"
+                      : CHIP_PLAZO[plazoDe(t.fecha_limite)]
+                  }`}
+                >
+                  📅 {etiquetaFechaCorta(t.fecha_limite)}
+                </span>
+              )}
+              {(() => {
+                const cs = checksDe(t.id);
+                if (cs.length === 0) return null;
+                const hechos = cs.filter((c) => c.hecho).length;
+                const conRetraso = cs.some(
+                  (c) =>
+                    !c.hecho && c.fecha_limite && diasHasta(c.fecha_limite) < 0,
+                );
+                return (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ${
+                      conRetraso
+                        ? "bg-error-suave text-error"
+                        : hechos === cs.length
+                          ? "bg-exito-suave text-exito"
+                          : "bg-superficie-2 text-texto-suave"
+                    }`}
+                  >
+                    ☑ {hechos}/{cs.length}
+                  </span>
+                );
+              })()}
+            </div>
+          )}
 
           {t.descripcion && (
             <p className="line-clamp-3 text-xs leading-relaxed whitespace-pre-wrap text-texto-suave">
@@ -989,6 +1235,131 @@ export function Tablero({
   }
 
   /**
+   * Subtareas dentro del detalle: checklist tipo Trello con persona y
+   * fecha POR ÍTEM. Editar la lista exige poder editar la tarjeta;
+   * marcar/desmarcar lo puede hacer además la persona del ítem (es su
+   * subtarea) — mismo reparto que las policies de la 014.
+   */
+  function seccionChecks(t: TarjetaTablero) {
+    const cs = checksDe(t.id);
+    const editable = puedeEditar(t);
+    if (cs.length === 0 && !editable) return null;
+    const hechos = cs.filter((c) => c.hecho).length;
+
+    return (
+      <div className="flex flex-col gap-1.5 border-t border-borde pt-3">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-texto-suave">
+          Subtareas{cs.length > 0 && ` · ${hechos}/${cs.length}`}
+        </p>
+
+        {cs.length > 0 && (
+          <ul className="flex flex-col gap-1">
+            {cs.map((c) => {
+              const puedeMarcar = editable || c.persona_id === personaId;
+              const vencido =
+                !c.hecho && c.fecha_limite && diasHasta(c.fecha_limite) < 0;
+              return (
+                <li key={c.id} className="flex flex-wrap items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={c.hecho}
+                    disabled={!puedeMarcar}
+                    onChange={() => void actualizarCheck(c, { hecho: !c.hecho })}
+                    aria-label={`${c.hecho ? "Desmarcar" : "Marcar"} «${c.texto}»`}
+                    className="size-4 shrink-0 accent-[var(--acento)]"
+                  />
+                  <span
+                    className={`min-w-0 flex-1 break-words text-sm ${
+                      c.hecho ? "text-texto-suave line-through" : "text-tinta"
+                    }`}
+                  >
+                    {c.texto}
+                  </span>
+                  {editable ? (
+                    <>
+                      <label className="sr-only" htmlFor={`check-persona-${c.id}`}>
+                        Persona de «{c.texto}»
+                      </label>
+                      <select
+                        id={`check-persona-${c.id}`}
+                        value={c.persona_id ?? ""}
+                        onChange={(e) =>
+                          void actualizarCheck(c, {
+                            persona_id: e.target.value || null,
+                          })
+                        }
+                        className="h-7 max-w-28 shrink-0 truncate rounded-md border border-borde bg-superficie px-1 text-xs text-texto outline-none focus:border-acento"
+                      >
+                        <option value="">Nadie</option>
+                        {equipo.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.nombre}
+                          </option>
+                        ))}
+                      </select>
+                      <label className="sr-only" htmlFor={`check-fecha-${c.id}`}>
+                        Fecha de «{c.texto}»
+                      </label>
+                      <input
+                        id={`check-fecha-${c.id}`}
+                        type="date"
+                        value={c.fecha_limite ?? ""}
+                        onChange={(e) =>
+                          void actualizarCheck(c, {
+                            fecha_limite: e.target.value || null,
+                          })
+                        }
+                        className={`h-7 shrink-0 rounded-md border border-borde bg-superficie px-1 text-xs outline-none focus:border-acento ${
+                          vencido ? "text-error" : "text-texto"
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void borrarCheck(c)}
+                        aria-label={`Borrar subtarea «${c.texto}»`}
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-texto-suave transition-colors hover:bg-superficie-2 hover:text-error focus-visible:outline-2 focus-visible:outline-acento"
+                      >
+                        ✕
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {c.persona_id && (
+                        <span
+                          title={nombrePersona.get(c.persona_id) ?? "?"}
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-borde bg-superficie-2 text-[10px] font-semibold text-texto"
+                        >
+                          {iniciales(nombrePersona.get(c.persona_id) ?? "?")}
+                        </span>
+                      )}
+                      {c.fecha_limite && (
+                        <span
+                          className={`shrink-0 text-[11px] tabular-nums ${
+                            vencido ? "font-medium text-error" : "text-texto-suave"
+                          }`}
+                        >
+                          📅 {etiquetaFechaCorta(c.fecha_limite)}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {editable && (
+          <FormularioNuevoCheck
+            key={t.id}
+            alCrear={(texto) => void crearCheck(t.id, texto)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  /**
    * Modal de detalle (tipo Trello): descripción completa sin recortar y
    * acciones rápidas (estado, asignarme). Editar/Borrar cierran el modal y
    * delegan en los flujos ya existentes de la columna (formulario inline /
@@ -1043,11 +1414,38 @@ export function Tablero({
             {asignadosTexto}
           </p>
 
+          {(t.urgente || t.fecha_limite) && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {t.urgente && (
+                <span className="rounded-full bg-error-suave px-2 py-0.5 text-[11px] font-semibold text-error">
+                  ⚑ Urgente
+                </span>
+              )}
+              {t.fecha_limite && (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ${
+                    t.estado === "hecha"
+                      ? "bg-superficie-2 text-texto-suave"
+                      : CHIP_PLAZO[plazoDe(t.fecha_limite)]
+                  }`}
+                >
+                  📅 Entrega: {etiquetaFechaCorta(t.fecha_limite)}
+                  {t.estado !== "hecha" &&
+                    (diasHasta(t.fecha_limite) < 0
+                      ? ` (vencida hace ${-diasHasta(t.fecha_limite)} d)`
+                      : ` (quedan ${diasHasta(t.fecha_limite)} d)`)}
+                </span>
+              )}
+            </div>
+          )}
+
           {t.descripcion && (
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-texto">
               {t.descripcion}
             </p>
           )}
+
+          {seccionChecks(t)}
 
           <div className="flex flex-wrap items-center gap-1.5 border-t border-borde pt-3">
             <button
@@ -1107,7 +1505,9 @@ export function Tablero({
     const hechas = tarjetasDe(c.id)
       .filter((t) => t.estado === "hecha" && enVista(t))
       .sort((a, b) => (b.hecha_en ?? "").localeCompare(a.hecha_en ?? ""));
-    const abiertas = hechasAbiertas.has(c.id);
+    // Con el filtro «Hechas» activo la sección plegada se abre sola:
+    // ocultar justo lo que se pide ver sería absurdo.
+    const abiertas = hechasAbiertas.has(c.id) || estadoFiltro === "hecha";
     const activaMovil = clienteMovilEfectivo === c.id;
 
     return (
@@ -1268,6 +1668,20 @@ export function Tablero({
               {nombre}
             </option>
           ))}
+        </select>
+        <label className="sr-only" htmlFor="filtro-estado">
+          Filtrar por estado
+        </label>
+        <select
+          id="filtro-estado"
+          value={estadoFiltro}
+          onChange={(e) => setEstadoFiltro(e.target.value as EstadoTarjeta | "")}
+          className={SELECT_FILTRO}
+        >
+          <option value="">Todos los estados</option>
+          <option value="pendiente">Pendientes</option>
+          <option value="en_curso">En curso</option>
+          <option value="hecha">Hechas</option>
         </select>
         {esAdmin && (
           <>

@@ -5,6 +5,7 @@ import type {
   Proyecto,
   SesionCronometro,
   Tarjeta,
+  TarjetaCheck,
 } from "@/lib/tipos";
 
 /** Días tras «hecha» antes de ocultarse del tablero (roadmap §7.2). */
@@ -22,6 +23,8 @@ export interface DatosTareas {
   equipo: Pick<Persona, "id" | "nombre">[];
   /** Ordenadas por posición dentro de su columna (empate: antigüedad). */
   tarjetas: TarjetaTablero[];
+  /** Subtareas de todas las tarjetas cargadas (el tablero las agrupa). */
+  checks: TarjetaCheck[];
   /** Cronómetros activos de la persona (bandeja de la cabecera). */
   sesiones: SesionCronometro[];
 }
@@ -68,6 +71,7 @@ export async function cargarTareas(
     equipoRes,
     tarjetasRes,
     asignacionesRes,
+    checksRes,
     sesionesRes,
   ] = await Promise.all([
     supabase.from("clientes").select("*").eq("activo", true).order("nombre"),
@@ -79,6 +83,7 @@ export async function cargarTareas(
       .order("nombre"),
     consultaTarjetas.order("posicion").order("creada_en"),
     supabase.from("tarjeta_asignaciones").select("*"),
+    supabase.from("tarjeta_checks").select("*").order("posicion"),
     supabase
       .from("cronometros")
       .select("*")
@@ -106,6 +111,7 @@ export async function cargarTareas(
       ...t,
       asignados: asignadosPorTarjeta.get(t.id) ?? [],
     })),
+    checks: checksRes.data ?? [],
     sesiones: sesionesRes.data ?? [],
   };
 }

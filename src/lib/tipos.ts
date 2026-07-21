@@ -70,6 +70,10 @@ export type Tarjeta = {
   /** La fija/limpia el trigger al entrar/salir de 'hecha'; base del
    *  autoarchivado a 30 días. Solo lectura desde la app. */
   hecha_en: string | null;
+  /** `YYYY-MM-DD` de entrega; colorea la tarjeta según proximidad. */
+  fecha_limite: string | null;
+  /** Marca manual, independiente del plazo (urgente ≠ vence pronto). */
+  urgente: boolean;
   creada_en: string;
   actualizado_en: string;
 }
@@ -78,6 +82,19 @@ export type Tarjeta = {
 export type TarjetaAsignacion = {
   tarjeta_id: string;
   persona_id: string;
+}
+
+/** Subtarea (checklist tipo Trello) con persona y fecha por ítem. */
+export type TarjetaCheck = {
+  id: string;
+  tarjeta_id: string;
+  texto: string;
+  hecho: boolean;
+  persona_id: string | null;
+  /** `YYYY-MM-DD` de entrega del ítem. */
+  fecha_limite: string | null;
+  posicion: number;
+  creada_en: string;
 }
 
 /* ── Wordle semanal (fase Cuco) ── */
@@ -197,9 +214,27 @@ export type Database = {
         // Insert/Update a propósito.
         Row: Tarjeta;
         Insert: Pick<Tarjeta, "proyecto_id" | "titulo" | "creada_por" | "posicion"> &
-          Partial<Pick<Tarjeta, "id" | "descripcion" | "estado">>;
+          Partial<Pick<Tarjeta, "id" | "descripcion" | "estado" | "fecha_limite" | "urgente">>;
         Update: Partial<
-          Pick<Tarjeta, "proyecto_id" | "titulo" | "descripcion" | "estado" | "posicion">
+          Pick<
+            Tarjeta,
+            | "proyecto_id"
+            | "titulo"
+            | "descripcion"
+            | "estado"
+            | "posicion"
+            | "fecha_limite"
+            | "urgente"
+          >
+        >;
+        Relationships: [];
+      };
+      tarjeta_checks: {
+        Row: TarjetaCheck;
+        Insert: Pick<TarjetaCheck, "tarjeta_id" | "texto" | "posicion"> &
+          Partial<Pick<TarjetaCheck, "id" | "hecho" | "persona_id" | "fecha_limite">>;
+        Update: Partial<
+          Pick<TarjetaCheck, "texto" | "hecho" | "persona_id" | "fecha_limite" | "posicion">
         >;
         Relationships: [];
       };
