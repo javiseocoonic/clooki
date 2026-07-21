@@ -9,15 +9,12 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { crearClienteNavegador } from "@/lib/supabase/navegador";
-import { EQUIPOS, NOMBRE_EQUIPO } from "@/lib/equipos";
 import { BuscadorCliente } from "./buscador-cliente";
 import type { TarjetaTablero } from "@/lib/datos/tareas";
 import type {
   Cliente,
-  Equipo,
   EstadoTarjeta,
   Persona,
-  PersonaEquipo,
   Proyecto,
 } from "@/lib/tipos";
 
@@ -27,6 +24,19 @@ type MiembroEquipo = Pick<Persona, "id" | "nombre">;
 /** Posición: insertar con saltos grandes; renumerar bajo umbral (007). */
 const SALTO = 1024;
 const UMBRAL_RENUMERAR = 0.001;
+
+/**
+ * Clave de tipo de trabajo: el nombre del proyecto normalizado
+ * (minúsculas, sin acentos), para que «Diseño» y «Diseno» de clientes
+ * distintos cuenten como el mismo tipo en el filtro del tablero.
+ */
+function claveTipo(nombre: string): string {
+  return nombre
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
+}
 
 const ETIQUETA_ESTADO: Record<EstadoTarjeta, string> = {
   pendiente: "Pendiente",
@@ -275,7 +285,6 @@ export function Tablero({
   esAdmin,
   clientes,
   equipo,
-  equiposPersonas,
   tarjetasIniciales,
   verArchivadas,
 }: {
@@ -283,8 +292,6 @@ export function Tablero({
   esAdmin: boolean;
   clientes: ClienteConProyectos[];
   equipo: MiembroEquipo[];
-  /** Pertenencia a equipos de trabajo (alimenta el filtro por equipo). */
-  equiposPersonas: PersonaEquipo[];
   tarjetasIniciales: TarjetaTablero[];
   verArchivadas: boolean;
 }) {
@@ -303,12 +310,12 @@ export function Tablero({
   const [detalle, setDetalle] = useState<string | null>(null);
   const dialogoRef = useRef<HTMLDivElement>(null);
   // Vista «Mías»: solo tarjetas asignadas a ti (y las columnas quedan en
-  // consecuencia). Se compone con dos filtros más: por equipo de trabajo
+  // consecuencia). Se compone con dos filtros más: por tipo de proyecto
   // (todo el mundo) y por persona (solo admin). Con CUALQUIER filtro
   // activo NO se reordena: mover relativo a una lista con huecos
   // escribiría posiciones confusas para el resto.
   const [soloMias, setSoloMias] = useState(false);
-  const [equipoFiltro, setEquipoFiltro] = useState<Equipo | "">("");
+  const [tipoFiltro, setTipoFiltro] = useState("");
   const [personaFiltro, setPersonaFiltro] = useState("");
   const arrastrandoRef = useRef<string | null>(null);
 
@@ -346,7 +353,7 @@ export function Tablero({
     tableroRef.current?.releasePointerCapture(e.pointerId);
   }
 
-  const filtroActivo = soloMias || equipoFiltro !== "" || personaFiltro !== "";
+  const filtroActivo = soloMias || tipoFiltro !== "" || personaFiltro !== "";
 
   const proyectoACliente = useMemo(() => {
     const m = new Map<string, ClienteConProyectos>();
@@ -382,32 +389,38 @@ export function Tablero({
   }, [detalle]);
   useFocoAtrapado(detalle !== null, dialogoRef);
 
-  // Miembros del equipo de trabajo elegido; null = sin filtro de equipo.
-  const miembrosEquipoFiltro = useMemo(() => {
-    if (equipoFiltro === "") return null;
-    return new Set(
-      equiposPersonas
-        .filter((pe) => pe.equipo === equipoFiltro)
-        .map((pe) => pe.persona_id),
-    );
-  }, [equiposPersonas, equipoFiltro]);
+  // Tipos de trabajo = nombres de proyecto distintos (Audiovisual,
+  // Consultoría, Desarrollo web…). El tipo es un atributo de la tarea —
+  // le llega por su proyecto — y no de las personas asignadas, así que
+  // el backlog sin asignar también responde a este filtro.
+  const tipos = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of clientes)
+      for (const p of c.proyectos) {
+        const clave = claveTipo(p.nombre);
+        if (!m.has(clave)) m.set(clave, p.nombre);
+      }
+    return [...m].sort((a, b) => a[1].localeCompare(b[1], "es"));
+  }, [clientes]);
 
-  // Una tarjeta «es» de un equipo si alguna persona asignada pertenece;
-  // el backlog (sin asignar) solo aparece sin filtros de gente.
+  const tipoPorProyecto = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of clientes)
+      for (const p of c.proyectos) m.set(p.id, claveTipo(p.nombre));
+    return m;
+  }, [clientes]);
+
   const tarjetasVista = useMemo(
     () =>
       tarjetas.filter((t) => {
         if (soloMias && !t.asignados.includes(personaId)) return false;
         if (personaFiltro !== "" && !t.asignados.includes(personaFiltro))
           return false;
-        if (
-          miembrosEquipoFiltro !== null &&
-          !t.asignados.some((id) => miembrosEquipoFiltro.has(id))
-        )
+        if (tipoFiltro !== "" && tipoPorProyecto.get(t.proyecto_id) !== tipoFiltro)
           return false;
         return true;
       }),
-    [tarjetas, soloMias, personaId, personaFiltro, miembrosEquipoFiltro],
+    [tarjetas, soloMias, personaId, personaFiltro, tipoFiltro, tipoPorProyecto],
   );
   const idsEnVista = useMemo(
     () => new Set(tarjetasVista.map((t) => t.id)),
@@ -1215,19 +1228,19 @@ export function Tablero({
             Mías{nMias > 0 ? ` (${nMias})` : ""}
           </button>
         </div>
-        <label className="sr-only" htmlFor="filtro-equipo">
-          Filtrar por equipo de trabajo
+        <label className="sr-only" htmlFor="filtro-tipo">
+          Filtrar por tipo de proyecto
         </label>
         <select
-          id="filtro-equipo"
-          value={equipoFiltro}
-          onChange={(e) => setEquipoFiltro(e.target.value as Equipo | "")}
+          id="filtro-tipo"
+          value={tipoFiltro}
+          onChange={(e) => setTipoFiltro(e.target.value)}
           className={SELECT_FILTRO}
         >
-          <option value="">Todos los equipos</option>
-          {EQUIPOS.map((e) => (
-            <option key={e} value={e}>
-              {NOMBRE_EQUIPO[e]}
+          <option value="">Todos los tipos</option>
+          {tipos.map(([clave, nombre]) => (
+            <option key={clave} value={clave}>
+              {nombre}
             </option>
           ))}
         </select>

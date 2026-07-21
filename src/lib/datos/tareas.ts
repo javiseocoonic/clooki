@@ -2,7 +2,6 @@ import { crearClienteServidor } from "@/lib/supabase/servidor";
 import type {
   Cliente,
   Persona,
-  PersonaEquipo,
   Proyecto,
   SesionCronometro,
   Tarjeta,
@@ -21,8 +20,6 @@ export interface DatosTareas {
   clientes: (Cliente & { proyectos: Proyecto[] })[];
   /** Equipo activo, para iniciales y para el selector de asignación. */
   equipo: Pick<Persona, "id" | "nombre">[];
-  /** Pertenencia a equipos de trabajo (filtro por equipo del tablero). */
-  equiposPersonas: PersonaEquipo[];
   /** Ordenadas por posición dentro de su columna (empate: antigüedad). */
   tarjetas: TarjetaTablero[];
   /** Cronómetros activos de la persona (bandeja de la cabecera). */
@@ -69,7 +66,6 @@ export async function cargarTareas(
     clientesRes,
     proyectosRes,
     equipoRes,
-    equiposPersonasRes,
     tarjetasRes,
     asignacionesRes,
     sesionesRes,
@@ -81,7 +77,6 @@ export async function cargarTareas(
       .select("id, nombre")
       .eq("activo", true)
       .order("nombre"),
-    supabase.from("persona_equipos").select("*"),
     consultaTarjetas.order("posicion").order("creada_en"),
     supabase.from("tarjeta_asignaciones").select("*"),
     supabase
@@ -107,7 +102,6 @@ export async function cargarTareas(
       proyectos: proyectos.filter((p) => p.cliente_id === c.id),
     })),
     equipo: equipoRes.data ?? [],
-    equiposPersonas: equiposPersonasRes.data ?? [],
     tarjetas: (tarjetasRes.data ?? []).map((t) => ({
       ...t,
       asignados: asignadosPorTarjeta.get(t.id) ?? [],
