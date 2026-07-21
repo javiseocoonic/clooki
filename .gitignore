@@ -45,7 +45,7 @@ next-env.d.ts
 scripts/usuarios.csv
 
 # Exportaciones de Trello y su informe de importación (datos internos)
-*coonic-audiovisual*.json
+* - coonic-*.json
 scripts/informe-trello.txt
 
 # Config local de Claude Code (rutas absolutas de cada máquina)

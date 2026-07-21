@@ -36,8 +36,14 @@ const rutaJson =
 /** Quien firma las tarjetas importadas (tarjetas.creada_por es NOT NULL). */
 const EMAIL_IMPORTADOR = process.env.IMPORTADOR_EMAIL ?? "jfernandez@coonic.com";
 
-/** Proyecto que se crea bajo cada cliente para colgar las tarjetas. */
-const NOMBRE_PROYECTO = "Audiovisual";
+/**
+ * Proyecto que se crea bajo cada cliente, según el tablero de origen
+ * (clave = campo `name` del JSON exportado).
+ */
+const PROYECTO_POR_TABLERO = new Map([
+  ["Coonic | Audiovisual", "Audiovisual"],
+  ["Coonic | Diseño", "Diseño"],
+]);
 
 // ---------- Alias ----------
 
@@ -46,28 +52,32 @@ const NOMBRE_PROYECTO = "Audiovisual";
 // antes que «TURISMO … MALAGA»; «CAMARA DE COMERCIO» antes que «MARI
 // PAZ HURTADO» (la entrevista a María Paz es un trabajo de la Cámara).
 const ALIAS_CLIENTES = [
-  [/TURISMO COSTA DEL SOL/, "Turismo Costa del Sol"],
+  [/TURISMO COSTA DEL SOL|\bTCS\b/, "Turismo Costa del Sol"],
   [/TURISMO (DE )?MALAGA|AYTO\.? TURISMO/, "Turismo de Málaga"],
   [/MI ?COLCHON|MICOLHON/, "Micolchón"],
   [/EL INGENIO/, "El Ingenio"],
-  [/LIMASAM?\b|CRUZ (DEL )?HUMILLADERO|BALDEO JACARANDA/, "Limasam"],
-  [/(MUSEO )?THYSSEN( MALAGA)?/, "Museo Thyssen"],
+  // El distrito 6 (Cruz de Humilladero) es cliente propio, como
+  // Campanillas o Ciudad Jardín. Va antes que Limasam a propósito: en
+  // títulos mixtos («LIMASAM - CRUZ HUMILLADERO») gana el distrito.
+  [/CRUZ DEL? ?HUMILLADERO|DISTRITO 6/, "Cruz de Humilladero"],
+  [/LIMASAM?\b|BALDEO JACARANDA|LIMPIEZA DE MALAGA/, "Limasam"],
+  [/(MUSEO )?THYS+E+N( MALAGA)?/, "Museo Thyssen"],
   [/HUTESA/, "Hutesa"],
   [/\bIAD\b/, "IAD"],
   [/NESSEN/, "Nessen"],
   [/CAMARA (DE )?COMERCIO/, "Cámara de Comercio"],
   [/CANAL MALAGA/, "Canal Málaga"],
-  [/BENDITA KATALINA/, "Bendita Katalina"],
+  [/BENDITA ?KATALI\w*/, "Bendita Katalina"],
   [/\bRUT\b/, "Rut"],
-  [/FAY ?HOTEL/, "Fayhotel"],
+  [/FAY ?HOTEL|FAY ?VICTORIA\w*/, "Fayhotel"],
   [/B BOU( HOTEL)?/, "B Bou Hotel"],
-  [/ANORETA ?GOLF/, "Añoreta Golf"],
-  [/JUNTA DE ANDALUCIA/, "Junta de Andalucía"],
+  [/ANORETA( ?GOLF)?/, "Añoreta Golf"],
+  [/JUNTA( DE)? ANDALUCIA/, "Junta de Andalucía"],
   [/MALAGA COMERCIO/, "Málaga Comercio"],
-  [/ACADEMIA GASTRONOMICA( DE MALAGA)?|\bA\.?G\.? FRITURA|CONCURSO FRITURA/, "Academia Gastronómica"],
+  [/ACADEMIA GASTRONOMICA( DE MALAGA)?|\bA\.?G\.? FRITURA|CONCURSO FRITURA|\bAGM\b/, "Academia Gastronómica"],
   [/ESSCA/, "Essca"],
   [/ARCHIVO MUNICIPAL/, "Archivo Municipal"],
-  [/AEPLAYAS|ASO\w* DE PLAYAS/, "Faeplayas"],
+  [/AEPLAYAS|ASOC?\w*\.? (DE )?PLAYAS|EXPL?OPLAYAS?\s?(2026)?/, "Faeplayas"],
   [/EVENOR/, "Evenor Abogados"],
   [/MONTERO ARAMBURU/, "Montero Aramburu"],
   [/LORING/, "Loring International"],
@@ -81,12 +91,54 @@ const ALIAS_CLIENTES = [
   [/CORDIA/, "Cordia Formación"],
   [/MENDALERENDA/, "Mendalerenda"],
   [/GUAJES/, "Guajes"],
+  // ---- Añadidos para el tablero de Diseño (jul 2026) ----
+  [/AEHCOS/, "Aehcos"],
+  [/JUSTICIA/, "Justicia"],
+  [/PARTICIPACION CIUDADANA/, "Participación Ciudadana"],
+  [/PENA JUAN BREVA/, "Peña Juan Breva"],
+  [/FESEMPLA/, "Fesempla"],
+  [/CERVEZAS VICTORIA/, "Cervezas Victoria"],
+  [/LA OPINION( DE MALAGA)?/, "La Opinión de Málaga"],
+  [/CAMPANILLAS/, "Campanillas"],
+  [/(DISTRITO )?CIUDAD JARDIN/, "Ciudad Jardín"],
+  [/SENDA AZUL/, "Senda Azul"],
+  [/GALEON/, "Galeón"],
+  [/RED BIBLIOTECAS MALAGA|BIBLIOTECA/, "Red Bibliotecas Málaga"],
+  [/(TORNEO (DE )?GOLF )?LA CALA( RESORT)?/, "La Cala Resort"],
+  [/DEL PARQUE FLATS?/, "Del Parque Flats"],
+  [/DO (SIERRAS|VINOS) DE MALAGA|RUTA (DE )?VINOS|MUSEOS VINO/, "DO Vinos de Málaga"],
+  [/TOURISM HUB/, "Tourism Hub"],
+  [/ADMUNDI/, "Admundi"],
+  [/CIO MIJAS/, "CIO Mijas"],
+  [/DONA FRANCISQUITA/, "Doña Francisquita"],
+  [/MEDIOLANUM/, "Mediolanum"],
+  [/MCARTHUR ?GLEN/, "McArthurGlen"],
+  [/\bPEBAR\b/, "Pebar"],
+  [/SARDELLA/, "Sardella"],
+  [/\bHRUM\b/, "Hrum"],
+  [/LOS APRENDEDORES/, "Los Aprendedores"],
+  [/AMIGOS ESPIGA/, "Amigos de la Espiga"],
+  [/GETAFE ?3/, "C.C. Getafe 3"],
+  // Genéricos al final a propósito: que primero casen los específicos
+  // («AYTO. TURISMO» → Turismo de Málaga, «JUNTA ANDALUCÍA», TCS…).
+  [/\bAYTO\b/, "Ayuntamiento de Málaga"],
+  [/\bJUNTA\b/, "Junta de Andalucía"],
+  [/\bTURISMO\b|\bCAPITALIDAD\b/, "Turismo de Málaga"],
+  [/\bACADEMIA\b/, "Academia Gastronómica"],
+  [/\bCOONIC\b/, "Coonic (interno)"],
 ];
 
 // Tarjetas cuyo cliente no se deduce del título: shortLink de Trello →
 // nombre de cliente. Rellenar tras revisar el ensayo; vacías se omiten.
 const CLIENTE_MANUAL = new Map([
-  // ["abc12345", "Cliente"],
+  // Diseño: el Premio de la Infancia es de la Junta; los logos de golf,
+  // del torneo de La Cala (mismo lote que las otras tarjetas La Cala).
+  ["4dx513J1", "Junta de Andalucía"],
+  ["kwF4PNDm", "La Cala Resort"],
+  // Sin cliente deducible → cajón interno (decisión Javi, 21 jul 2026).
+  ["5CLLADtM", "Coonic (interno)"],
+  ["d6ncoxNa", "Coonic (interno)"],
+  ["Q3knPXPC", "Coonic (interno)"],
 ]);
 
 // Lista de Trello con nombre de persona → palabras que deben aparecer
@@ -97,6 +149,11 @@ const LISTA_PERSONA = new Map([
   ["ROYER", ["ROYER", "ROGERIO"]],
   ["JOSE MANUEL", ["JOSE MANUEL", "CASADO"]],
   ["PEPE", ["PEPE", "JOSE CASADO"]],
+  // Tablero de Diseño
+  ["NOR", ["NORBERTO"]],
+  ["CARLOS", ["CARLOS"]],
+  ["ANDRES", ["ANDRES"]],
+  ["ALICE", ["ALICE"]],
 ]);
 
 // Miembro de Trello → nombre en Clooki, para los casos que el cruce
@@ -111,6 +168,10 @@ const ESTADO_POR_LISTA = new Map([
   ["PENDIENTE POR COMENZAR", "pendiente"],
   ["PENDIENTE POR APROBAR", "pendiente"],
   ["FINALIZADAS", "hecha"],
+  // Tablero de Diseño
+  ["POR ASIGNAR O COMENZAR", "pendiente"],
+  ["PENDIENTES APROBACION", "pendiente"],
+  ["FINALIZADO", "hecha"],
 ]);
 
 // ---------- Utilidades ----------
@@ -136,7 +197,7 @@ function detectarCliente(nombre) {
     let titulo = limpio;
     // Si el cliente encabeza el título, se recorta (la columna ya lo dice).
     if (m.index <= 3) {
-      titulo = limpio.slice(m.index + m[0].length).replace(/^[\s\-–.:,]+/, "");
+      titulo = limpio.slice(m.index + m[0].length).replace(/^[\s\-–.:,/]+/, "");
     }
     if (!titulo) titulo = limpio;
     return { cliente, titulo: titulo.slice(0, 120).trim() || limpio.slice(0, 120) };
@@ -167,7 +228,17 @@ function fecha(iso) {
 
 // ---------- Carga y transformación ----------
 
+/** Umbral de «reciente» para la lista Pendientes aprobación (60 días). */
+const CORTE_APROBACION = new Date(Date.now() - 60 * 86400000).toISOString();
+
 const datos = JSON.parse(readFileSync(join(raiz, rutaJson), "utf8"));
+const NOMBRE_PROYECTO = PROYECTO_POR_TABLERO.get(datos.name);
+if (!NOMBRE_PROYECTO) {
+  console.error(
+    `Tablero desconocido «${datos.name}»: añádelo a PROYECTO_POR_TABLERO.`,
+  );
+  process.exit(1);
+}
 const listasPorId = new Map(datos.lists.map((l) => [l.id, l]));
 const miembrosPorId = new Map(datos.members.map((m) => [m.id, m.fullName]));
 const checklistsPorId = new Map(datos.checklists.map((c) => [c.id, c]));
@@ -184,7 +255,17 @@ for (const tarjeta of abiertas) {
   let { cliente, titulo } = detectarCliente(tarjeta.name);
   if (!cliente) cliente = CLIENTE_MANUAL.get(tarjeta.shortLink) ?? null;
 
-  const estado = ESTADO_POR_LISTA.get(listaNorm) ?? "en_curso";
+  let estado = ESTADO_POR_LISTA.get(listaNorm) ?? "en_curso";
+  // «Pendientes aprobación» (Diseño) es el aparcamiento de casi todo el
+  // tablero (413 tarjetas desde enero). Decisión Javi (21 jul 2026):
+  // recientes (≤60 días de actividad) → pendiente; el resto → hecha con
+  // su fecha real, así las viejas caen directas al archivo del tablero.
+  if (
+    listaNorm === "PENDIENTES APROBACION" &&
+    tarjeta.dateLastActivity < CORTE_APROBACION
+  ) {
+    estado = "hecha";
+  }
   // Asignados: la lista con nombre de persona + los miembros de Trello.
   const asignados = new Set(
     (tarjeta.idMembers ?? [])
