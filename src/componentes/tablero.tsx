@@ -26,12 +26,12 @@ const SALTO = 1024;
 const UMBRAL_RENUMERAR = 0.001;
 
 /**
- * Clave de tipo de trabajo: el nombre del proyecto normalizado
- * (minúsculas, sin acentos), para que «Diseño» y «Diseno» de clientes
- * distintos cuenten como el mismo tipo en el filtro del tablero.
+ * Normaliza para comparar: minúsculas y sin acentos. Da la clave del
+ * tipo de trabajo (que «Diseño» y «Diseno» de clientes distintos cuenten
+ * como el mismo tipo) y el cotejo del buscador de cliente.
  */
-function claveTipo(nombre: string): string {
-  return nombre
+function normalizar(texto: string): string {
+  return texto
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
@@ -317,6 +317,10 @@ export function Tablero({
   const [soloMias, setSoloMias] = useState(false);
   const [tipoFiltro, setTipoFiltro] = useState("");
   const [personaFiltro, setPersonaFiltro] = useState("");
+  // Buscador de cliente: oculta columnas enteras según se teclea. No
+  // entra en filtroActivo: no deja huecos DENTRO de una columna, así
+  // que reordenar con él activo sigue siendo seguro.
+  const [busquedaCliente, setBusquedaCliente] = useState("");
   const arrastrandoRef = useRef<string | null>(null);
 
   // Paneo con el ratón: clic y arrastre en el fondo del tablero mueve el
@@ -397,7 +401,7 @@ export function Tablero({
     const m = new Map<string, string>();
     for (const c of clientes)
       for (const p of c.proyectos) {
-        const clave = claveTipo(p.nombre);
+        const clave = normalizar(p.nombre);
         if (!m.has(clave)) m.set(clave, p.nombre);
       }
     return [...m].sort((a, b) => a[1].localeCompare(b[1], "es"));
@@ -406,7 +410,7 @@ export function Tablero({
   const tipoPorProyecto = useMemo(() => {
     const m = new Map<string, string>();
     for (const c of clientes)
-      for (const p of c.proyectos) m.set(p.id, claveTipo(p.nombre));
+      for (const p of c.proyectos) m.set(p.id, normalizar(p.nombre));
     return m;
   }, [clientes]);
 
@@ -431,13 +435,19 @@ export function Tablero({
     [tarjetas, personaId],
   );
 
-  // Columnas = clientes con alguna tarjeta EN LA VISTA (+ donde se crea).
+  // Columnas = clientes con alguna tarjeta EN LA VISTA (+ donde se crea),
+  // acotadas por el buscador de cliente si hay algo tecleado.
   const columnas = useMemo(() => {
     const conTarjeta = new Set(
       tarjetasVista.map((t) => proyectoACliente.get(t.proyecto_id)?.id),
     );
-    return clientes.filter((c) => conTarjeta.has(c.id) || creandoEn === c.id);
-  }, [clientes, tarjetasVista, proyectoACliente, creandoEn]);
+    const aguja = normalizar(busquedaCliente);
+    return clientes.filter(
+      (c) =>
+        (conTarjeta.has(c.id) || creandoEn === c.id) &&
+        (aguja === "" || normalizar(c.nombre).includes(aguja)),
+    );
+  }, [clientes, tarjetasVista, proyectoACliente, creandoEn, busquedaCliente]);
 
   const clienteMovilEfectivo =
     clienteMovil && columnas.some((c) => c.id === clienteMovil)
@@ -1228,6 +1238,21 @@ export function Tablero({
             Mías{nMias > 0 ? ` (${nMias})` : ""}
           </button>
         </div>
+        <label className="sr-only" htmlFor="busqueda-cliente">
+          Buscar cliente
+        </label>
+        <input
+          id="busqueda-cliente"
+          type="search"
+          value={busquedaCliente}
+          onChange={(e) => setBusquedaCliente(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setBusquedaCliente("");
+          }}
+          autoComplete="off"
+          placeholder="Buscar cliente…"
+          className="h-9 w-40 rounded-lg border border-borde bg-superficie px-2.5 text-sm text-tinta outline-none placeholder:text-texto-suave focus:border-acento focus:ring-2 focus:ring-acento/20"
+        />
         <label className="sr-only" htmlFor="filtro-tipo">
           Filtrar por tipo de proyecto
         </label>
@@ -1311,11 +1336,13 @@ export function Tablero({
 
       {columnas.length === 0 ? (
         <div className="rounded-xl border border-dashed border-borde p-8 text-center text-sm text-texto-suave">
-          {soloMias
-            ? "No tienes tarjetas asignadas. Pasa a «Todas» y coge alguna."
-            : filtroActivo
-              ? "Ninguna tarjeta coincide con el filtro."
-              : "Aún no hay tarjetas. Crea la primera con «Nueva tarjeta»."}
+          {busquedaCliente.trim() !== ""
+            ? "Ningún cliente coincide con la búsqueda."
+            : soloMias
+              ? "No tienes tarjetas asignadas. Pasa a «Todas» y coge alguna."
+              : filtroActivo
+                ? "Ninguna tarjeta coincide con el filtro."
+                : "Aún no hay tarjetas. Crea la primera con «Nueva tarjeta»."}
         </div>
       ) : (
         <div

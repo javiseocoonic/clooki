@@ -2,7 +2,6 @@ import { crearClienteServidor } from "@/lib/supabase/servidor";
 import type {
   Cliente,
   Persona,
-  PersonaEquipo,
   Proyecto,
   SesionCronometro,
 } from "@/lib/tipos";
@@ -26,8 +25,6 @@ export interface DatosAdmin {
   clientes: Cliente[];
   proyectos: Proyecto[];
   sesiones: SesionCronometro[];
-  /** Pertenencia a equipos de trabajo (chips de Gestión → Personas). */
-  equiposPersonas: PersonaEquipo[];
 }
 
 /**
@@ -50,7 +47,7 @@ export async function cargarAdmin(): Promise<DatosAdmin | null> {
     .maybeSingle();
   if (!persona || persona.rol !== "admin") return null;
 
-  const [personasRes, clientesRes, proyectosRes, sesionesRes, equiposRes] =
+  const [personasRes, clientesRes, proyectosRes, sesionesRes] =
     await Promise.all([
       supabase.from("personas").select("*").order("nombre"),
       supabase.from("clientes").select("*").order("nombre"),
@@ -60,7 +57,6 @@ export async function cargarAdmin(): Promise<DatosAdmin | null> {
         .select("*")
         .eq("persona_id", persona.id)
         .is("fin", null),
-      supabase.from("persona_equipos").select("*"),
     ]);
 
   return {
@@ -69,7 +65,6 @@ export async function cargarAdmin(): Promise<DatosAdmin | null> {
     clientes: clientesRes.data ?? [],
     proyectos: proyectosRes.data ?? [],
     sesiones: sesionesRes.data ?? [],
-    equiposPersonas: equiposRes.data ?? [],
   };
 }
 

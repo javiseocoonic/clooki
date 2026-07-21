@@ -54,20 +54,6 @@ export type SesionCronometro = {
   segundos_volcados: number | null;
 }
 
-/** Equipos de trabajo (lista cerrada; check en persona_equipos, 008). */
-export type Equipo =
-  | "contenidos_rrss"
-  | "diseno"
-  | "audiovisual"
-  | "desarrollo"
-  | "practicas";
-
-/** Pertenencia a un equipo (0..n por persona); se asigna en Gestión. */
-export type PersonaEquipo = {
-  persona_id: string;
-  equipo: Equipo;
-}
-
 export type EstadoTarjeta = "pendiente" | "en_curso" | "hecha";
 
 export type Tarjeta = {
@@ -222,13 +208,6 @@ export type Database = {
         Row: TarjetaAsignacion;
         Insert: TarjetaAsignacion;
         Update: Partial<TarjetaAsignacion>;
-        Relationships: [];
-      };
-      persona_equipos: {
-        // Filas (persona, equipo) puras: se crean y se borran, sin update.
-        Row: PersonaEquipo;
-        Insert: PersonaEquipo;
-        Update: Partial<PersonaEquipo>;
         Relationships: [];
       };
       claves_api: {
