@@ -101,7 +101,11 @@ const LISTA_PERSONA = new Map([
 
 // Miembro de Trello → nombre en Clooki, para los casos que el cruce
 // automático por tokens (con prefijos: ALE≈ALEJANDRO) no resuelve.
-const ALIAS_PERSONAS = new Map([["ELISABET", "ELIZABET BELDA"]]);
+const ALIAS_PERSONAS = new Map([
+  ["ELISABET", "ELIZABET BELDA"],
+  ["ROGERIO MATOS DE SOUZA", "ROYER MATOS"],
+  ["JOSE CASADO", "JOSE MANUEL CASADO"],
+]);
 
 const ESTADO_POR_LISTA = new Map([
   ["PENDIENTE POR COMENZAR", "pendiente"],
@@ -291,7 +295,8 @@ if (!url || !claveSecreta) {
 }
 const supabase = createClient(url, claveSecreta);
 
-async function ok(res, contexto) {
+async function ok(consulta, contexto) {
+  const res = await consulta;
   if (res.error) {
     console.error(`Error en ${contexto}:`, res.error.message);
     process.exit(1);
@@ -309,19 +314,24 @@ if (!importador) {
   process.exit(1);
 }
 
-// Guarda de idempotencia: shortUrls ya presentes en descripciones.
+// Guarda de idempotencia: shortLink → id de las tarjetas ya importadas
+// (el enlace de Trello vive en la descripción). Re-ejecutar no duplica
+// tarjetas, pero SÍ completa asignaciones que faltasen (p. ej. tras dar
+// de alta a una persona o añadir un alias).
 const existentes = await ok(
-  supabase.from("tarjetas").select("descripcion").like("descripcion", "%trello.com/c/%"),
+  supabase
+    .from("tarjetas")
+    .select("id, descripcion")
+    .like("descripcion", "%trello.com/c/%"),
   "tarjetas existentes",
 );
-const yaImportadas = new Set(
-  existentes.flatMap(
-    (t) => t.descripcion?.match(/trello\.com\/c\/([\w-]+)/g) ?? [],
-  ),
-);
-const pendientesImportar = plan.filter(
-  (f) => !yaImportadas.has(`trello.com/c/${f.shortLink}`),
-);
+const idPorShortLink = new Map();
+for (const t of existentes) {
+  for (const m of t.descripcion?.matchAll(/trello\.com\/c\/([\w-]+)/g) ?? []) {
+    idPorShortLink.set(m[1], t.id);
+  }
+}
+const pendientesImportar = plan.filter((f) => !idPorShortLink.has(f.shortLink));
 if (pendientesImportar.length < plan.length) {
   console.log(
     `\nYa importadas antes (se saltan): ${plan.length - pendientesImportar.length}`,
@@ -423,7 +433,31 @@ for (const f of pendientesImportar.sort((a, b) => a.pos - b.pos)) {
   }
 }
 
+// Tarjetas ya importadas en pasadas anteriores: sincronizar asignaciones
+// que falten (inserción idempotente sobre la clave tarjeta+persona).
+let asignacionesNuevas = 0;
+for (const f of plan) {
+  const tarjetaId = idPorShortLink.get(f.shortLink);
+  if (!tarjetaId || !f.asignados.length) continue;
+  const ids = [...new Set(f.asignados.map(resolverPersona))].filter(Boolean);
+  if (!ids.length) continue;
+  const filas = await ok(
+    supabase
+      .from("tarjeta_asignaciones")
+      .upsert(
+        ids.map((persona_id) => ({ tarjeta_id: tarjetaId, persona_id })),
+        { onConflict: "tarjeta_id,persona_id", ignoreDuplicates: true },
+      )
+      .select("persona_id"),
+    `sincronizar asignaciones de ${f.shortLink}`,
+  );
+  asignacionesNuevas += filas.length;
+}
+
 console.log(`\nImportadas ${creadas} tarjetas.`);
+if (asignacionesNuevas) {
+  console.log(`Asignaciones añadidas a tarjetas ya importadas: ${asignacionesNuevas}`);
+}
 if (sinPersona.size) {
   console.log(
     "Asignaciones omitidas (persona no encontrada en Clooki):",
