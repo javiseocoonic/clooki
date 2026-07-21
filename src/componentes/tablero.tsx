@@ -146,6 +146,9 @@ export interface DatosFormularioTarjeta {
   /** `YYYY-MM-DD` de entrega; "" = sin fecha. */
   fechaLimite: string;
   urgente: boolean;
+  /** Subtareas: id null = nueva. En el formulario solo se edita el
+   *  texto; persona y fecha por ítem viven en el modal de detalle. */
+  checks: { id: string | null; texto: string }[];
 }
 
 function FormularioTarjeta({
@@ -181,7 +184,18 @@ function FormularioTarjeta({
   );
   const [fechaLimite, setFechaLimite] = useState(inicial?.fechaLimite ?? "");
   const [urgente, setUrgente] = useState(inicial?.urgente ?? false);
+  const [checksForm, setChecksForm] = useState<
+    { id: string | null; texto: string }[]
+  >(() => inicial?.checks ?? []);
+  const [nuevoCheckTexto, setNuevoCheckTexto] = useState("");
   const [guardando, setGuardando] = useState(false);
+
+  function anadirCheck() {
+    const texto = nuevoCheckTexto.trim().slice(0, 200).trim();
+    if (!texto) return;
+    setChecksForm((prev) => [...prev, { id: null, texto }]);
+    setNuevoCheckTexto("");
+  }
 
   // Tú primero: «para mí» es un toque en tu propio chip.
   const equipoOrdenado = useMemo(() => {
@@ -203,6 +217,9 @@ function FormularioTarjeta({
       asignados: [...asignados],
       fechaLimite,
       urgente,
+      checks: checksForm
+        .map((c) => ({ id: c.id, texto: c.texto.trim().slice(0, 200).trim() }))
+        .filter((c) => c.texto.length > 0),
     });
     if (!cerrado) setGuardando(false);
   }
@@ -305,6 +322,76 @@ function FormularioTarjeta({
           ⚑ Urgente
         </button>
       </div>
+
+      <fieldset>
+        <legend className="pb-1 text-[11px] font-medium uppercase tracking-wide text-texto-suave">
+          Subtareas
+        </legend>
+        {checksForm.length > 0 && (
+          <ul className="flex flex-col gap-1 pb-1.5">
+            {checksForm.map((c, i) => (
+              <li key={c.id ?? `nueva-${i}`} className="flex items-center gap-1.5">
+                <label className="sr-only" htmlFor={`subtarea-${i}`}>
+                  Subtarea {i + 1}
+                </label>
+                <input
+                  id={`subtarea-${i}`}
+                  type="text"
+                  maxLength={200}
+                  value={c.texto}
+                  onChange={(e) =>
+                    setChecksForm((prev) =>
+                      prev.map((x, j) =>
+                        j === i ? { ...x, texto: e.target.value } : x,
+                      ),
+                    )
+                  }
+                  className="h-8 min-w-0 flex-1 rounded-md border border-borde bg-superficie px-2 text-sm text-tinta outline-none focus:border-acento focus:ring-2 focus:ring-acento/20"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setChecksForm((prev) => prev.filter((_, j) => j !== i))
+                  }
+                  aria-label={`Quitar subtarea «${c.texto}»`}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-texto-suave transition-colors hover:bg-superficie-2 hover:text-error focus-visible:outline-2 focus-visible:outline-acento"
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="flex items-center gap-1.5">
+          <label className="sr-only" htmlFor="subtarea-nueva">
+            Nueva subtarea
+          </label>
+          <input
+            id="subtarea-nueva"
+            type="text"
+            maxLength={200}
+            placeholder="Añadir subtarea…"
+            value={nuevoCheckTexto}
+            onChange={(e) => setNuevoCheckTexto(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter añade la subtarea, no envía el formulario entero.
+              if (e.key === "Enter") {
+                e.preventDefault();
+                anadirCheck();
+              }
+            }}
+            className="h-8 min-w-0 flex-1 rounded-md border border-borde bg-superficie px-2 text-sm text-tinta outline-none placeholder:text-texto-suave focus:border-acento focus:ring-2 focus:ring-acento/20"
+          />
+          <button
+            type="button"
+            onClick={anadirCheck}
+            disabled={nuevoCheckTexto.trim().length === 0}
+            className="h-8 shrink-0 rounded-md border border-borde-fuerte px-2.5 text-xs font-medium text-texto transition-colors hover:border-acento hover:text-acento focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
+          >
+            Añadir
+          </button>
+        </div>
+      </fieldset>
 
       <fieldset>
         <legend className="pb-1 text-[11px] font-medium uppercase tracking-wide text-texto-suave">
@@ -659,6 +746,24 @@ export function Tablero({
       }
     }
 
+    if (d.checks.length > 0) {
+      const { data: checksCreados, error: errorChecks } = await supabase
+        .from("tarjeta_checks")
+        .insert(
+          d.checks.map((c, i) => ({
+            tarjeta_id: data.id,
+            texto: c.texto,
+            posicion: (i + 1) * SALTO,
+          })),
+        )
+        .select();
+      if (errorChecks) {
+        setAnuncio("Tarjeta creada, pero alguna subtarea no se pudo añadir.");
+      } else if (checksCreados) {
+        setChecks((prev) => [...prev, ...checksCreados]);
+      }
+    }
+
     setTarjetas((prev) => [...prev, { ...data, asignados }]);
     setCreandoEn(null);
     setAnuncio(`Tarjeta «${data.titulo}» creada.`);
@@ -711,6 +816,75 @@ export function Tablero({
         setAnuncio("Guardado, pero alguna asignación no se pudo cambiar.");
         asignadosFinal = t.asignados;
       }
+    }
+
+    // Subtareas: diff contra las existentes — nuevas se crean, textos
+    // cambiados se actualizan, ausentes se borran (persona/fecha por
+    // ítem no se tocan aquí: viven en el modal de detalle).
+    {
+      const originales = checksDe(t.id);
+      const originalPorId = new Map(originales.map((c) => [c.id, c]));
+      const idsFinales = new Set(
+        d.checks.filter((c) => c.id !== null).map((c) => c.id as string),
+      );
+      const bajasChecks = originales.filter((c) => !idsFinales.has(c.id));
+      const renombrados = d.checks.filter(
+        (c): c is { id: string; texto: string } =>
+          c.id !== null && originalPorId.get(c.id)?.texto !== c.texto,
+      );
+      const altasChecks = d.checks.filter((c) => c.id === null);
+      const posMax =
+        originales.length > 0
+          ? Math.max(...originales.map((c) => c.posicion))
+          : 0;
+
+      const operaciones: PromiseLike<{ error: unknown }>[] = [];
+      if (bajasChecks.length > 0) {
+        operaciones.push(
+          supabase
+            .from("tarjeta_checks")
+            .delete()
+            .in("id", bajasChecks.map((c) => c.id)),
+        );
+      }
+      for (const c of renombrados) {
+        operaciones.push(
+          supabase
+            .from("tarjeta_checks")
+            .update({ texto: c.texto })
+            .eq("id", c.id),
+        );
+      }
+      const insercion =
+        altasChecks.length > 0
+          ? await supabase
+              .from("tarjeta_checks")
+              .insert(
+                altasChecks.map((c, i) => ({
+                  tarjeta_id: t.id,
+                  texto: c.texto,
+                  posicion: posMax + (i + 1) * SALTO,
+                })),
+              )
+              .select()
+          : null;
+      const resultadosChecks = await Promise.all(operaciones);
+      if (
+        resultadosChecks.some((r) => r.error) ||
+        (insercion && insercion.error)
+      ) {
+        setAnuncio("Guardado, pero alguna subtarea no se pudo cambiar.");
+      }
+      const idsBaja = new Set(bajasChecks.map((c) => c.id));
+      const textoPorId = new Map(renombrados.map((c) => [c.id, c.texto]));
+      setChecks((prev) => [
+        ...prev
+          .filter((c) => !idsBaja.has(c.id))
+          .map((c) =>
+            textoPorId.has(c.id) ? { ...c, texto: textoPorId.get(c.id) as string } : c,
+          ),
+        ...(insercion?.data ?? []),
+      ]);
     }
 
     setTarjetas((prev) =>
@@ -993,6 +1167,7 @@ export function Tablero({
               asignados: t.asignados,
               fechaLimite: t.fecha_limite ?? "",
               urgente: t.urgente,
+              checks: checksDe(t.id).map((c) => ({ id: c.id, texto: c.texto })),
             }}
             etiquetaGuardar="Guardar"
             alGuardar={(d) => guardarEdicion(t, d)}
