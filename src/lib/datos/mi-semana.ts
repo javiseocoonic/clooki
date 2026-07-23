@@ -95,6 +95,7 @@ export async function cargarMiSemana(
     horasRes,
     recientesRes,
     sesionesRes,
+    ocultasRes,
     tarjetasRes,
     asignacionesRes,
   ] = await Promise.all([
@@ -117,6 +118,12 @@ export async function cargarMiSemana(
       .select("*")
       .eq("persona_id", persona.id)
       .is("fin", null),
+    // Líneas que la persona ocultó ESTA semana con la papelera (015).
+    supabase
+      .from("lineas_ocultas")
+      .select("proyecto_id, tarea")
+      .eq("persona_id", persona.id)
+      .eq("semana", dias[0]),
     // «Mis tareas»: dos consultas en paralelo (todas las no-hechas + mis
     // asignaciones) y el cruce en memoria — evita un round-trip secuencial.
     supabase
@@ -141,8 +148,17 @@ export async function cargarMiSemana(
   // Líneas = pares proyecto+tarea con horas esta semana ∪ con horas
   // recientes ∪ con cronómetro activo (una sesión en marcha aún no tiene
   // horas volcadas, pero su línea debe verse al recargar — brief §11.3.e).
+  // Una línea oculta con la papelera (015) no se «recuerda» de semanas
+  // pasadas; horas de ESTA semana o un cronómetro en marcha mandan más.
+  const ocultas = new Set(
+    (ocultasRes.data ?? []).map((o) => idLinea(o.proyecto_id, o.tarea)),
+  );
   const paresLinea = new Map<string, { proyectoId: string; tarea: string }>();
-  for (const f of [...horas, ...recientes, ...sesiones]) {
+  for (const f of recientes) {
+    const k = idLinea(f.proyecto_id, f.tarea);
+    if (!ocultas.has(k)) paresLinea.set(k, { proyectoId: f.proyecto_id, tarea: f.tarea });
+  }
+  for (const f of [...horas, ...sesiones]) {
     const proyectoId = f.proyecto_id;
     const tarea = f.tarea;
     paresLinea.set(idLinea(proyectoId, tarea), { proyectoId, tarea });

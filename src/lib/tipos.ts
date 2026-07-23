@@ -84,6 +84,15 @@ export type TarjetaAsignacion = {
   persona_id: string;
 }
 
+/** Línea recordada que la persona ocultó una semana concreta (015). */
+export type LineaOculta = {
+  persona_id: string;
+  /** Lunes ISO de la semana. */
+  semana: string;
+  proyecto_id: string;
+  tarea: string;
+}
+
 /** Subtarea (checklist tipo Trello) con persona y fecha por ítem. */
 export type TarjetaCheck = {
   id: string;
@@ -227,6 +236,13 @@ export type Database = {
             | "urgente"
           >
         >;
+        Relationships: [];
+      };
+      lineas_ocultas: {
+        // Filas identidad puras: se crean y se borran, sin update.
+        Row: LineaOculta;
+        Insert: LineaOculta;
+        Update: Partial<LineaOculta>;
         Relationships: [];
       };
       tarjeta_checks: {
