@@ -99,6 +99,17 @@ function etiquetaFechaCorta(fecha: string): string {
   return `${d.getDate()} ${MES_CORTO[d.getMonth()]}`;
 }
 
+/**
+ * Tipos de trabajo con resumen de carga por persona (decisión Javi,
+ * jul 2026): los equipos que reparten tarea a tarea. La clave llega
+ * normalizada (minúsculas sin acentos); «web» cubre «Desarrollo web».
+ */
+function tipoConResumen(clave: string): boolean {
+  return (
+    clave === "audiovisual" || clave === "diseno" || clave.includes("web")
+  );
+}
+
 const BOTON_ICONO =
   "flex h-10 w-10 items-center justify-center rounded-lg text-texto-suave transition-colors hover:bg-superficie-2 hover:text-tinta focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-30";
 
@@ -660,6 +671,36 @@ export function Tablero({
     () => new Set(tarjetasVista.map((t) => t.id)),
     [tarjetasVista],
   );
+
+  // Carga por persona del tipo filtrado (audiovisual/diseño/web): quién
+  // lleva cuántas tarjetas VIVAS, para repartir de un vistazo. Cuenta
+  // sobre todas las tarjetas del tipo —ignora los demás filtros a
+  // propósito: la foto de la carga del equipo no debe encogerse porque
+  // además estés mirando «Mías»— y las hechas no son carga.
+  const resumenCarga = useMemo(() => {
+    if (tipoFiltro === "" || !tipoConResumen(tipoFiltro)) return null;
+    const cuenta = new Map<string, number>();
+    let sinAsignar = 0;
+    for (const t of tarjetas) {
+      if (t.estado === "hecha") continue;
+      if (tipoPorProyecto.get(t.proyecto_id) !== tipoFiltro) continue;
+      if (t.asignados.length === 0) sinAsignar++;
+      else
+        for (const id of t.asignados)
+          cuenta.set(id, (cuenta.get(id) ?? 0) + 1);
+    }
+    return {
+      personas: [...cuenta].sort(
+        (a, b) =>
+          b[1] - a[1] ||
+          (nombrePersona.get(a[0]) ?? "").localeCompare(
+            nombrePersona.get(b[0]) ?? "",
+            "es",
+          ),
+      ),
+      sinAsignar,
+    };
+  }, [tipoFiltro, tarjetas, tipoPorProyecto, nombrePersona]);
   const nMias = useMemo(
     () => tarjetas.filter((t) => t.asignados.includes(personaId)).length,
     [tarjetas, personaId],
@@ -1946,6 +1987,50 @@ export function Tablero({
           />
         </span>
       </div>
+
+      {/* Carga por persona del equipo filtrado: el más cargado primero.
+          Cada chip filtra por esa persona (y «Sin asignar» es el montón
+          pendiente de repartir). */}
+      {resumenCarga &&
+        (resumenCarga.personas.length > 0 || resumenCarga.sinAsignar > 0) && (
+          <div
+            role="region"
+            aria-label="Carga de trabajo por persona"
+            className="flex flex-wrap items-center gap-1.5 rounded-xl border border-borde bg-superficie px-3 py-2"
+          >
+            <span className="text-[11px] font-medium uppercase tracking-wide text-texto-suave">
+              Carga
+            </span>
+            {resumenCarga.sinAsignar > 0 && (
+              <span className="rounded-full bg-aviso-suave px-2.5 py-1 text-xs font-medium tabular-nums text-aviso">
+                Sin asignar · {resumenCarga.sinAsignar}
+              </span>
+            )}
+            {resumenCarga.personas.map(([id, n]) => {
+              const activa = personaFiltro === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={activa}
+                  title={
+                    activa
+                      ? "Quitar el filtro por persona"
+                      : `Ver solo las tarjetas de ${nombrePersona.get(id) ?? "?"}`
+                  }
+                  onClick={() => setPersonaFiltro(activa ? "" : id)}
+                  className={`rounded-full border px-2.5 py-1 text-xs font-medium tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-acento ${
+                    activa
+                      ? "border-acento bg-acento-suave text-acento"
+                      : "border-borde text-texto hover:border-borde-fuerte hover:bg-superficie-2"
+                  }`}
+                >
+                  {nombrePersona.get(id) ?? "?"} · {n}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
       {/* Selector de cliente en móvil (mismo patrón que el selector de día). */}
       {columnas.length > 0 && (
