@@ -142,6 +142,10 @@ export function RejillaSemana({
     Record<string, EstadoCelda>
   >({});
   const [extras, setExtras] = useState<LineaSemana[]>([]);
+  // Mis tarjetas vivas del tablero: estado compartido entre el panel
+  // «Mis tareas» y el check de línea completada de la rejilla — marcar
+  // hecha en un sitio debe reflejarse en el otro sin recargar.
+  const [tarjetasMias, setTarjetasMias] = useState(misTarjetas);
   const [ocultas, setOcultas] = useState<Set<string>>(new Set());
   const [verFinde, setVerFinde] = useState(() =>
     horas.some((h) => h.fecha === dias[5] || h.fecha === dias[6]),
@@ -1023,12 +1027,62 @@ export function RejillaSemana({
     );
   }
 
+  // Tarjeta mía del tablero que corresponde a cada línea (vínculo por
+  // copia: proyecto + título como tarea) — alimenta el check de la fila.
+  const tarjetaPorLinea = useMemo(() => {
+    const m = new Map<string, TarjetaMia>();
+    for (const t of tarjetasMias)
+      m.set(idLinea(t.proyecto_id, limpiarTarea(t.titulo)), t);
+    return m;
+  }, [tarjetasMias]);
+
+  /** Check de la fila: marca la tarjeta del tablero como hecha. */
+  async function completarTarea(tarjeta: TarjetaMia) {
+    const { error } = await supabase
+      .from("tarjetas")
+      .update({ estado: "hecha" })
+      .eq("id", tarjeta.id);
+    if (error) {
+      mostrarBadge("No se pudo marcar como hecha");
+      return;
+    }
+    setTarjetasMias((prev) => prev.filter((t) => t.id !== tarjeta.id));
+    mostrarBadge(`«${tarjeta.titulo}» hecha ✓`);
+  }
+
   function botonesLinea(linea: LineaSemana) {
     const kLinea = claveLinea(linea);
     const sesion = sesionPorLinea.get(kLinea);
     const vacia = sinHoras(linea);
+    const tarjeta = tarjetaPorLinea.get(kLinea);
     return (
       <span className="flex items-center">
+        {tarjeta && (
+          <button
+            type="button"
+            onClick={() => void completarTarea(tarjeta)}
+            aria-label={`Marcar «${tarjeta.titulo}» como hecha en el tablero`}
+            title="Tarea completada (pasa a Hecha en el tablero)"
+            className="flex size-11 items-center justify-center rounded-md text-texto-suave transition-colors hover:bg-exito-suave hover:text-exito focus-visible:outline-2 focus-visible:outline-acento sm:size-10"
+          >
+            <svg width="16" height="16" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+              <circle
+                cx="7.5"
+                cy="7.5"
+                r="6"
+                stroke="currentColor"
+                strokeWidth="1.3"
+              />
+              <path
+                d="M4.9 7.7 6.7 9.5l3.5-3.8"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
         {crono && (
           <button
             type="button"
@@ -1548,7 +1602,8 @@ export function RejillaSemana({
         />
         <MisTareas
           clientes={clientes}
-          tarjetasIniciales={misTarjetas}
+          tarjetas={tarjetasMias}
+          alCambiar={setTarjetasMias}
           clavesExistentes={clavesVisibles}
           alAnadir={anadirLineas}
           conectarGuardado={(fn) => {

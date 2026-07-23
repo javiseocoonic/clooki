@@ -15,7 +15,11 @@ import type { Cliente, Proyecto } from "@/lib/tipos";
 
 interface Props {
   clientes: (Cliente & { proyectos: Proyecto[] })[];
-  tarjetasIniciales: TarjetaMia[];
+  /** Estado controlado por la rejilla: el check de línea completada y
+   *  este panel comparten las mismas tarjetas (marcar en un sitio se
+   *  refleja en el otro sin recargar). */
+  tarjetas: TarjetaMia[];
+  alCambiar: React.Dispatch<React.SetStateAction<TarjetaMia[]>>;
   /** Claves (idLinea) de las líneas ya visibles: se marcan y no se duplican. */
   clavesExistentes: string[];
   alAnadir: (lineas: LineaSemana[]) => void;
@@ -30,14 +34,14 @@ function claveDeTarjeta(t: TarjetaMia): string {
 
 export function MisTareas({
   clientes,
-  tarjetasIniciales,
+  tarjetas,
+  alCambiar: setTarjetas,
   clavesExistentes,
   alAnadir,
   conectarGuardado,
 }: Props) {
   const supabase = useMemo(() => crearClienteNavegador(), []);
   const crono = useCronometros();
-  const [tarjetas, setTarjetas] = useState(tarjetasIniciales);
   const [abierto, setAbierto] = useState(false);
   const [anuncio, setAnuncio] = useState("");
   const tarjetasRef = useRef(tarjetas);
