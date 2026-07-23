@@ -9,7 +9,13 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { crearClienteNavegador } from "@/lib/supabase/navegador";
+import { limpiarTarea } from "@/lib/semana";
 import { BuscadorCliente } from "./buscador-cliente";
+import {
+  duracionMs,
+  formatearDuracionMs,
+  useCronometros,
+} from "./cronometros";
 import type { TarjetaTablero } from "@/lib/datos/tareas";
 import type {
   Cliente,
@@ -507,6 +513,7 @@ export function Tablero({
   verArchivadas: boolean;
 }) {
   const supabase = useMemo(() => crearClienteNavegador(), []);
+  const crono = useCronometros();
   const [tarjetas, setTarjetas] = useState(tarjetasIniciales);
   const [checks, setChecks] = useState(checksIniciales);
   const [anuncio, setAnuncio] = useState("");
@@ -1124,6 +1131,50 @@ export function Tablero({
 
   /* ── Piezas de render ── */
 
+  /**
+   * Play en la tarjeta: arranca un cronómetro con el título como tarea
+   * de línea (vínculo por copia, como en «Mis tareas»); al parar, el
+   * tiempo se vuelca a la celda de hoy y aparece en Mi semana. Si esa
+   * línea ya está en marcha, el botón muestra el tiempo y para.
+   */
+  function botonCronometro(t: TarjetaTablero) {
+    if (!crono || t.estado === "hecha") return null;
+    const tarea = limpiarTarea(t.titulo);
+    const sesion = crono.sesiones.find(
+      (s) => s.proyecto_id === t.proyecto_id && s.tarea === tarea,
+    );
+    if (sesion) {
+      return (
+        <button
+          type="button"
+          onClick={() => void crono.parar(sesion.id)}
+          title="Parar el cronómetro (vuelca el tiempo a Mi semana)"
+          aria-label={`Parar el cronómetro de «${t.titulo}»`}
+          className="flex h-8 items-center gap-1.5 rounded-full bg-acento-suave px-2.5 text-xs font-medium tabular-nums text-acento transition-colors hover:bg-acento/15 focus-visible:outline-2 focus-visible:outline-acento"
+        >
+          <span
+            aria-hidden="true"
+            className="punto-pulso size-2 rounded-full bg-acento"
+          />
+          {formatearDuracionMs(duracionMs(sesion, crono.ahora))}
+        </button>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={() => void crono.arrancar(t.proyecto_id, tarea)}
+        title="Empezar a trabajar (el tiempo cuenta en Mi semana)"
+        aria-label={`Empezar a trabajar en «${t.titulo}»`}
+        className={`${BOTON_ICONO} h-8 w-8 hover:text-acento`}
+      >
+        <svg viewBox="0 0 16 16" className="h-4 w-4" fill="currentColor">
+          <path d="M5.2 3.3v9.4a.5.5 0 0 0 .76.43l7.6-4.7a.5.5 0 0 0 0-.86l-7.6-4.7a.5.5 0 0 0-.76.43Z" />
+        </svg>
+      </button>
+    );
+  }
+
   function chipsAsignados(t: TarjetaTablero) {
     if (t.asignados.length === 0) {
       return <span className="text-xs text-texto-suave">Sin asignar</span>;
@@ -1319,6 +1370,7 @@ export function Tablero({
           >
             {ETIQUETA_ESTADO[t.estado]}
           </button>
+          {botonCronometro(t)}
           <span className="ml-auto flex items-center">
             {t.estado !== "hecha" && !filtroActivo && (
               <>
@@ -1631,6 +1683,7 @@ export function Tablero({
             >
               {ETIQUETA_ESTADO[t.estado]}
             </button>
+            {botonCronometro(t)}
             <button
               type="button"
               onClick={() => void alternarme(t)}
