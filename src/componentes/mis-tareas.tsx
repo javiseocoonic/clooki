@@ -6,7 +6,7 @@
 // «hecha» siempre es decisión humana.
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { crearClienteNavegador } from "@/lib/supabase/navegador";
 import { idLinea, limpiarTarea } from "@/lib/semana";
 import { useCronometros } from "./cronometros";
@@ -32,6 +32,14 @@ function claveDeTarjeta(t: TarjetaMia): string {
   return idLinea(t.proyecto_id, limpiarTarea(t.titulo));
 }
 
+/** Quita acentos/diacríticos y baja a minúsculas para comparar. */
+function normalizar(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+}
+
 export function MisTareas({
   clientes,
   tarjetas,
@@ -42,7 +50,9 @@ export function MisTareas({
 }: Props) {
   const supabase = useMemo(() => crearClienteNavegador(), []);
   const crono = useCronometros();
+  const idBase = useId();
   const [abierto, setAbierto] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
   const [anuncio, setAnuncio] = useState("");
   const tarjetasRef = useRef(tarjetas);
   useEffect(() => {
@@ -88,6 +98,24 @@ export function MisTareas({
 
   const n = grupos.reduce((s, g) => s + g.length, 0);
   const existentes = new Set(clavesExistentes);
+
+  // Buscador (como en «+ Añadir línea»): filtra por título de la tarjeta,
+  // proyecto o cliente, sin distinguir acentos ni mayúsculas.
+  const gruposVisibles = useMemo(() => {
+    const aguja = normalizar(busqueda.trim());
+    if (aguja === "") return grupos;
+    return grupos
+      .map((grupo) =>
+        grupo.filter(
+          ({ t, proyecto, cliente }) =>
+            normalizar(t.titulo).includes(aguja) ||
+            normalizar(proyecto.nombre).includes(aguja) ||
+            normalizar(cliente.nombre).includes(aguja),
+        ),
+      )
+      .filter((grupo) => grupo.length > 0);
+  }, [grupos, busqueda]);
+  const nVisibles = gruposVisibles.reduce((s, g) => s + g.length, 0);
 
   // ── Automatismo pendiente → en curso ──
 
@@ -170,7 +198,10 @@ export function MisTareas({
         </p>
         <button
           type="button"
-          onClick={() => setAbierto(true)}
+          onClick={() => {
+            setBusqueda("");
+            setAbierto(true);
+          }}
           aria-expanded={false}
           className="inline-flex items-center gap-1.5 rounded-lg border border-borde-fuerte px-3 py-2 text-sm font-medium text-texto transition-colors hover:border-acento hover:text-acento focus-visible:outline-2 focus-visible:outline-acento"
         >
@@ -220,8 +251,29 @@ export function MisTareas({
         </p>
       ) : (
         <>
+          <label htmlFor={`${idBase}-buscar`} className="sr-only">
+            Buscar tarea
+          </label>
+          <input
+            id={`${idBase}-buscar`}
+            type="text"
+            autoFocus
+            autoComplete="off"
+            placeholder="Buscar tarea…"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            className="h-10 w-full rounded-lg border border-borde-fuerte bg-superficie px-2.5 text-sm text-tinta outline-none placeholder:text-texto-suave focus:border-acento focus:ring-2 focus:ring-acento/20"
+          />
+          <p aria-live="polite" className="sr-only">
+            {nVisibles === 1 ? "1 tarea" : `${nVisibles} tareas`}
+          </p>
+          {nVisibles === 0 ? (
+            <p className="px-1 py-3 text-sm text-texto-suave">
+              Ninguna tarea coincide
+            </p>
+          ) : (
           <ul className="flex flex-col">
-            {grupos.map((grupo) => (
+            {gruposVisibles.map((grupo) => (
               <li key={grupo[0].cliente.id}>
                 <p className="px-1 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-texto-suave">
                   {grupo[0].cliente.nombre}
@@ -286,6 +338,7 @@ export function MisTareas({
               </li>
             ))}
           </ul>
+          )}
           <p className="mt-2 border-t border-borde px-1 pt-2 text-xs text-texto-suave">
             <Link
               href="/tareas"
