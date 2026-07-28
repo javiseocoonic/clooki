@@ -106,6 +106,61 @@ export function etiquetaSemana(lunesIso: string): string {
   return `${lunes.getDate()} ${MESES_CORTOS[lunes.getMonth()]} – ${finalDomingo}`;
 }
 
+/**
+ * Etiqueta de un rango de fechas: "15 – 20 jul 2026", "28 jul – 3 ago 2026"
+ * o "28 dic 2026 – 5 ene 2027". Un solo día: "15 jul 2026".
+ */
+export function etiquetaRangoFechas(desdeIso: string, hastaIso: string): string {
+  const a = deIso(desdeIso);
+  const b = deIso(hastaIso);
+  const finB = `${b.getDate()} ${MESES_CORTOS[b.getMonth()]} ${b.getFullYear()}`;
+  if (desdeIso === hastaIso) return finB;
+  if (a.getFullYear() !== b.getFullYear())
+    return `${a.getDate()} ${MESES_CORTOS[a.getMonth()]} ${a.getFullYear()} – ${finB}`;
+  if (a.getMonth() !== b.getMonth())
+    return `${a.getDate()} ${MESES_CORTOS[a.getMonth()]} – ${finB}`;
+  return `${a.getDate()} – ${finB}`;
+}
+
+const MESES_LARGOS = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+] as const;
+
+/** Etiqueta de un mes `YYYY-MM`: "julio 2026". */
+export function etiquetaMes(mesIso: string): string {
+  const [y, m] = mesIso.split("-").map(Number);
+  return `${MESES_LARGOS[m - 1]} ${y}`;
+}
+
+/**
+ * Días laborables (L–V) entre dos fechas ISO, ambas incluidas, sin tope
+ * de "hoy" (a diferencia de diasLaborables del Resumen: aquí se cuentan
+ * también periodos futuros). Cap defensivo: 400 días.
+ */
+export function contarLaborables(desdeIso: string, hastaIso: string): number {
+  let n = 0;
+  const d = deIso(desdeIso);
+  for (let i = 0; i < 400; i++) {
+    const iso = aIso(d);
+    if (iso > hastaIso) break;
+    const dia = d.getDay();
+    if (dia >= 1 && dia <= 5) n++;
+    d.setDate(d.getDate() + 1);
+  }
+  return n;
+}
+
 /** Tope por celda: un día completo, en segundos. */
 export const SEGUNDOS_DIA = 86400;
 

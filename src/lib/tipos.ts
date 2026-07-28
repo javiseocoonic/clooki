@@ -84,6 +84,18 @@ export type TarjetaAsignacion = {
   persona_id: string;
 }
 
+/** Periodo de vacaciones (rango inclusivo; sin solapes por persona). */
+export type Vacacion = {
+  id: string;
+  persona_id: string;
+  /** `YYYY-MM-DD`, inclusivo. Un solo día = desde = hasta. */
+  desde: string;
+  hasta: string;
+  /** "" = sin nota. Recortada, máx. 120. */
+  nota: string;
+  creada_en: string;
+}
+
 /** Subtarea (checklist tipo Trello) con persona y fecha por ítem. */
 export type TarjetaCheck = {
   id: string;
@@ -243,6 +255,14 @@ export type Database = {
         Row: TarjetaAsignacion;
         Insert: TarjetaAsignacion;
         Update: Partial<TarjetaAsignacion>;
+        Relationships: [];
+      };
+      vacaciones: {
+        // Sin update a propósito (RLS): un periodo se borra y se crea.
+        Row: Vacacion;
+        Insert: Pick<Vacacion, "persona_id" | "desde" | "hasta"> &
+          Partial<Pick<Vacacion, "id" | "nota">>;
+        Update: Partial<Vacacion>;
         Relationships: [];
       };
       claves_api: {

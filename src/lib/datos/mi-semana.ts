@@ -50,8 +50,9 @@ export interface DatosMiSemana {
   horas: RegistroHoras[];
   /**
    * Días laborables (L–V) de la semana ANTERIOR a la visible sin ningún
-   * registro. Alimenta el aviso de semana incompleta (brief §14.1); la
-   * página solo lo muestra cuando la semana visible es la actual.
+   * registro ni vacaciones apuntadas. Alimenta el aviso de semana
+   * incompleta (brief §14.1); la página solo lo muestra cuando la semana
+   * visible es la actual.
    */
   diasSinHorasSemanaAnterior: number;
   /** Sesiones de cronómetro activas de la persona (fin = null). */
@@ -92,6 +93,8 @@ export async function cargarMiSemana(
 
   const dias = diasDeSemana(lunesIso);
   const desdeRecordado = sumarSemanas(lunesIso, -SEMANAS_RECORDADAS);
+  // L–V de la semana anterior, para el aviso de semana incompleta.
+  const diasSemanaAnterior = diasDeSemana(sumarSemanas(lunesIso, -1)).slice(0, 5);
 
   const [
     clientesRes,
@@ -99,6 +102,7 @@ export async function cargarMiSemana(
     horasRes,
     recientesRes,
     sesionesRes,
+    vacacionesRes,
     tarjetasRes,
     asignacionesRes,
   ] = await Promise.all([
@@ -121,6 +125,14 @@ export async function cargarMiSemana(
       .select("*")
       .eq("persona_id", persona.id)
       .is("fin", null),
+    // Vacaciones que tocan la semana anterior: un día de vacaciones no
+    // cuenta para el aviso de semana incompleta.
+    supabase
+      .from("vacaciones")
+      .select("desde, hasta")
+      .eq("persona_id", persona.id)
+      .lte("desde", diasSemanaAnterior[4])
+      .gte("hasta", diasSemanaAnterior[0]),
     // «Mis tareas»: dos consultas en paralelo (todas las no-hechas + mis
     // asignaciones) y el cruce en memoria — evita un round-trip secuencial.
     supabase
@@ -182,14 +194,13 @@ export async function cargarMiSemana(
     .sort((a, b) => b[1].localeCompare(a[1]))
     .map(([id]) => id);
 
-  // Días L–V de la semana anterior sin ningún registro (aviso §14.1).
-  const diasSemanaAnterior = diasDeSemana(sumarSemanas(lunesIso, -1)).slice(
-    0,
-    5,
-  );
+  // Días L–V de la semana anterior sin registro ni vacaciones (aviso §14.1).
   const fechasConHoras = new Set(recientes.map((r) => r.fecha));
+  const vacacionesSemanaAnterior = vacacionesRes.data ?? [];
   const diasSinHorasSemanaAnterior = diasSemanaAnterior.filter(
-    (d) => !fechasConHoras.has(d),
+    (d) =>
+      !fechasConHoras.has(d) &&
+      !vacacionesSemanaAnterior.some((v) => v.desde <= d && d <= v.hasta),
   ).length;
 
   const misIds = new Set(

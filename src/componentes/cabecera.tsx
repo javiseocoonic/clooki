@@ -26,7 +26,7 @@ export function Cabecera({
   children,
 }: {
   persona: Persona;
-  seccion: "semana" | "tareas" | "resumen" | "gestion";
+  seccion: "semana" | "tareas" | "vacaciones" | "resumen" | "gestion";
   children?: ReactNode;
 }) {
   return (
@@ -37,13 +37,20 @@ export function Cabecera({
       >
         <Logotipo className="text-lg" />
       </Link>
-      {/* Mi semana y Tareas son de todo el equipo; Resumen y Gestión, admin. */}
+      {/* Mi semana, Tareas y Vacaciones son de todo el equipo; Resumen y
+          Gestión, admin. */}
       <nav aria-label="Secciones" className="flex items-center gap-1">
         <Link href="/" className={claseEnlace(seccion === "semana")}>
           Mi semana
         </Link>
         <Link href="/tareas" className={claseEnlace(seccion === "tareas")}>
           Tareas
+        </Link>
+        <Link
+          href="/vacaciones"
+          className={claseEnlace(seccion === "vacaciones")}
+        >
+          Vacaciones
         </Link>
         {persona.rol === "admin" && (
           <>

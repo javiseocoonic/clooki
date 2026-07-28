@@ -4,6 +4,7 @@ import type {
   Persona,
   Proyecto,
   SesionCronometro,
+  Vacacion,
 } from "@/lib/tipos";
 
 /** Nombre del cliente-cajón de trabajo no imputable (brief §14.2). */
@@ -81,5 +82,23 @@ export async function cargarHorasRango(
     .lte("fecha", hasta)
     .order("fecha")
     .range(0, 49999); // por encima del límite por defecto de 1000 filas
+  return data ?? [];
+}
+
+/**
+ * Vacaciones de todo el equipo que tocan el rango dado, ambos extremos
+ * incluidos (admin ve todas vía RLS; un miembro solo vería las suyas).
+ */
+export async function cargarVacacionesRango(
+  desde: string,
+  hasta: string,
+): Promise<Vacacion[]> {
+  const supabase = await crearClienteServidor();
+  const { data } = await supabase
+    .from("vacaciones")
+    .select("*")
+    .lte("desde", hasta)
+    .gte("hasta", desde)
+    .order("desde");
   return data ?? [];
 }
