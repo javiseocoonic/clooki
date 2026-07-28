@@ -94,7 +94,7 @@ export default async function PaginaVacaciones({
     typeof error === "string" ? MENSAJES_ERROR[error] : undefined;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-4 sm:px-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-4 sm:px-6">
       <Cabecera persona={persona} seccion="vacaciones" />
 
       <main className="mt-5 flex-1">
