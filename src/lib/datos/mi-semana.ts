@@ -11,7 +11,11 @@ import type {
   Tarjeta,
 } from "@/lib/tipos";
 
-/** Semanas hacia atrás que se miran para "recordar" las líneas de trabajo. */
+/**
+ * Semanas hacia atrás con horas que alimentan el grupo "Recientes" del
+ * selector de cliente y el aviso de semana incompleta. Las líneas de la
+ * rejilla NO se recuerdan de semanas pasadas: cada semana empieza vacía.
+ */
 const SEMANAS_RECORDADAS = 6;
 
 export interface ProyectoConCliente extends Proyecto {
@@ -37,9 +41,9 @@ export interface DatosMiSemana {
   /** Clientes activos con sus proyectos activos, para "+ Añadir línea". */
   clientes: (Cliente & { proyectos: Proyecto[] })[];
   /**
-   * Líneas de la rejilla: pares proyecto+tarea con horas esta semana o en
-   * las últimas SEMANAS_RECORDADAS semanas, orden estable por cliente,
-   * proyecto y tarea (la línea sin tarea primero).
+   * Líneas de la rejilla: pares proyecto+tarea con horas ESTA semana (o
+   * cronómetro en marcha), orden estable por cliente, proyecto y tarea
+   * (la línea sin tarea primero). No se arrastra nada de semanas pasadas.
    */
   lineas: LineaSemana[];
   /** Registros de la semana visible (celdas con valor). */
@@ -95,7 +99,6 @@ export async function cargarMiSemana(
     horasRes,
     recientesRes,
     sesionesRes,
-    ocultasRes,
     tarjetasRes,
     asignacionesRes,
   ] = await Promise.all([
@@ -118,12 +121,6 @@ export async function cargarMiSemana(
       .select("*")
       .eq("persona_id", persona.id)
       .is("fin", null),
-    // Líneas que la persona ocultó ESTA semana con la papelera (015).
-    supabase
-      .from("lineas_ocultas")
-      .select("proyecto_id, tarea")
-      .eq("persona_id", persona.id)
-      .eq("semana", dias[0]),
     // «Mis tareas»: dos consultas en paralelo (todas las no-hechas + mis
     // asignaciones) y el cruce en memoria — evita un round-trip secuencial.
     supabase
@@ -145,19 +142,12 @@ export async function cargarMiSemana(
   const clientesPorId = new Map(clientes.map((c) => [c.id, c]));
   const proyectosPorId = new Map(proyectos.map((p) => [p.id, p]));
 
-  // Líneas = pares proyecto+tarea con horas esta semana ∪ con horas
-  // recientes ∪ con cronómetro activo (una sesión en marcha aún no tiene
-  // horas volcadas, pero su línea debe verse al recargar — brief §11.3.e).
-  // Una línea oculta con la papelera (015) no se «recuerda» de semanas
-  // pasadas; horas de ESTA semana o un cronómetro en marcha mandan más.
-  const ocultas = new Set(
-    (ocultasRes.data ?? []).map((o) => idLinea(o.proyecto_id, o.tarea)),
-  );
+  // Líneas = pares proyecto+tarea con horas esta semana ∪ con cronómetro
+  // activo (una sesión en marcha aún no tiene horas volcadas, pero su
+  // línea debe verse al recargar — brief §11.3.e). Nada se «recuerda» de
+  // semanas pasadas: cada semana empieza vacía y una línea borrada con la
+  // papelera pierde sus horas de la semana, así que no vuelve al recargar.
   const paresLinea = new Map<string, { proyectoId: string; tarea: string }>();
-  for (const f of recientes) {
-    const k = idLinea(f.proyecto_id, f.tarea);
-    if (!ocultas.has(k)) paresLinea.set(k, { proyectoId: f.proyecto_id, tarea: f.tarea });
-  }
   for (const f of [...horas, ...sesiones]) {
     const proyectoId = f.proyecto_id;
     const tarea = f.tarea;

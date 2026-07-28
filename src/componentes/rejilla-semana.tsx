@@ -600,16 +600,6 @@ export function RejillaSemana({
 
   function anadirLineas(nuevas: LineaSemana[]) {
     if (nuevas.length === 0) return;
-    // Re-añadir una línea retira su ocultación persistida (015).
-    for (const l of nuevas) {
-      void supabase
-        .from("lineas_ocultas")
-        .delete()
-        .eq("persona_id", personaId)
-        .eq("semana", dias[0])
-        .eq("proyecto_id", l.id)
-        .eq("tarea", l.tarea);
-    }
     setOcultas((prev) => {
       const s = new Set(prev);
       nuevas.forEach((l) => s.delete(claveLinea(l)));
@@ -666,21 +656,6 @@ export function RejillaSemana({
     setOcultas((prev) => new Set(prev).add(kLinea));
     if (confirmandoBorrado === kLinea) setConfirmandoBorrado(null);
     if (editandoTarea === kLinea) setEditandoTarea(null);
-    // Persistente (015): sin esto, la línea «recordada» de semanas
-    // pasadas volvía a aparecer al recargar. Mejor-esfuerzo: si falla,
-    // el único coste es que reaparezca, como antes.
-    void supabase.from("lineas_ocultas").upsert(
-      {
-        persona_id: personaId,
-        semana: dias[0],
-        proyecto_id: linea.id,
-        tarea: linea.tarea,
-      },
-      {
-        onConflict: "persona_id,semana,proyecto_id,tarea",
-        ignoreDuplicates: true,
-      },
-    );
   }
 
   function sinHoras(linea: LineaSemana): boolean {
@@ -822,27 +797,6 @@ export function RejillaSemana({
       s.delete(kNueva);
       return s;
     });
-    // Persistente (015): la línea con la tarea vieja no debe volver a
-    // recordarse; la nueva, si estaba oculta, deja de estarlo.
-    void supabase.from("lineas_ocultas").upsert(
-      {
-        persona_id: personaId,
-        semana: dias[0],
-        proyecto_id: linea.id,
-        tarea: linea.tarea,
-      },
-      {
-        onConflict: "persona_id,semana,proyecto_id,tarea",
-        ignoreDuplicates: true,
-      },
-    );
-    void supabase
-      .from("lineas_ocultas")
-      .delete()
-      .eq("persona_id", personaId)
-      .eq("semana", dias[0])
-      .eq("proyecto_id", linea.id)
-      .eq("tarea", nueva);
     setEditandoTarea(null);
     mostrarBadge("Tarea guardada ✓");
   }
