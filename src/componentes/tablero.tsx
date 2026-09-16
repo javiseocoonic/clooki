@@ -798,7 +798,9 @@ export function Tablero({
   // (todo el mundo) y por persona (solo admin). Con CUALQUIER filtro
   // activo NO se reordena: mover relativo a una lista con huecos
   // escribiría posiciones confusas para el resto.
-  const [soloMias, setSoloMias] = useState(false);
+  // Todas · Mías (asignadas a mí) · Creadas por mí (las llevan otros):
+  // mismo reparto que los bloques de «Mis tareas» en Mi semana.
+  const [vista, setVista] = useState<"todas" | "mias" | "creadas">("todas");
   const [tipoFiltro, setTipoFiltro] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState<EstadoTarjeta | "">("");
   const [personaFiltro, setPersonaFiltro] = useState("");
@@ -843,7 +845,7 @@ export function Tablero({
   }
 
   const filtroActivo =
-    soloMias || tipoFiltro !== "" || estadoFiltro !== "" || personaFiltro !== "";
+    vista !== "todas" || tipoFiltro !== "" || estadoFiltro !== "" || personaFiltro !== "";
 
   const proyectoACliente = useMemo(() => {
     const m = new Map<string, ClienteConProyectos>();
@@ -903,7 +905,12 @@ export function Tablero({
   const tarjetasVista = useMemo(
     () =>
       tarjetas.filter((t) => {
-        if (soloMias && !t.asignados.includes(personaId)) return false;
+        if (vista === "mias" && !t.asignados.includes(personaId)) return false;
+        if (
+          vista === "creadas" &&
+          (t.creada_por !== personaId || t.asignados.includes(personaId))
+        )
+          return false;
         if (personaFiltro === SIN_ASIGNAR) {
           if (t.asignados.length > 0) return false;
         } else if (personaFiltro !== "" && !t.asignados.includes(personaFiltro)) {
@@ -916,7 +923,7 @@ export function Tablero({
       }),
     [
       tarjetas,
-      soloMias,
+      vista,
       personaId,
       personaFiltro,
       tipoFiltro,
@@ -958,8 +965,23 @@ export function Tablero({
       sinAsignar,
     };
   }, [tipoFiltro, tarjetas, tipoPorProyecto, nombrePersona]);
+  // Contadores sin las hechas: los mismos números que «Mis tareas» en
+  // Mi semana (allí las hechas no se cargan).
   const nMias = useMemo(
-    () => tarjetas.filter((t) => t.asignados.includes(personaId)).length,
+    () =>
+      tarjetas.filter(
+        (t) => t.estado !== "hecha" && t.asignados.includes(personaId),
+      ).length,
+    [tarjetas, personaId],
+  );
+  const nCreadas = useMemo(
+    () =>
+      tarjetas.filter(
+        (t) =>
+          t.estado !== "hecha" &&
+          t.creada_por === personaId &&
+          !t.asignados.includes(personaId),
+      ).length,
     [tarjetas, personaId],
   );
 
@@ -2251,30 +2273,28 @@ export function Tablero({
           aria-label="Filtrar tarjetas"
           className="inline-flex rounded-lg bg-superficie-2 p-0.5"
         >
-          <button
-            type="button"
-            aria-pressed={!soloMias}
-            onClick={() => setSoloMias(false)}
-            className={`rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-acento ${
-              !soloMias
-                ? "bg-tinta font-medium text-superficie"
-                : "text-texto-suave hover:text-tinta"
-            }`}
-          >
-            Todas
-          </button>
-          <button
-            type="button"
-            aria-pressed={soloMias}
-            onClick={() => setSoloMias(true)}
-            className={`rounded-md px-3 py-1.5 text-sm tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-acento ${
-              soloMias
-                ? "bg-tinta font-medium text-superficie"
-                : "text-texto-suave hover:text-tinta"
-            }`}
-          >
-            Mías{nMias > 0 ? ` (${nMias})` : ""}
-          </button>
+          {(
+            [
+              ["todas", "Todas", 0],
+              ["mias", "Mías", nMias],
+              ["creadas", "Creadas por mí", nCreadas],
+            ] as const
+          ).map(([clave, etiqueta, n]) => (
+            <button
+              key={clave}
+              type="button"
+              aria-pressed={vista === clave}
+              onClick={() => setVista(clave)}
+              className={`rounded-md px-3 py-1.5 text-sm tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-acento ${
+                vista === clave
+                  ? "bg-tinta font-medium text-superficie"
+                  : "text-texto-suave hover:text-tinta"
+              }`}
+            >
+              {etiqueta}
+              {n > 0 ? ` (${n})` : ""}
+            </button>
+          ))}
         </div>
         <label className="sr-only" htmlFor="busqueda-cliente">
           Buscar cliente
@@ -2451,9 +2471,11 @@ export function Tablero({
         <div className="rounded-xl border border-dashed border-borde p-8 text-center text-sm text-texto-suave">
           {busquedaCliente.trim() !== ""
             ? "Ningún cliente coincide con la búsqueda."
-            : soloMias
+            : vista === "mias"
               ? "No tienes tarjetas asignadas. Pasa a «Todas» y coge alguna."
-              : filtroActivo
+              : vista === "creadas"
+                ? "No has creado tarjetas que lleven otros."
+                : filtroActivo
                 ? "Ninguna tarjeta coincide con el filtro."
                 : "Aún no hay tarjetas. Crea la primera con «Nueva tarjeta»."}
         </div>
