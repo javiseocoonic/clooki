@@ -30,11 +30,20 @@ export interface LineaSemana extends ProyectoConCliente {
   tarea: string;
 }
 
-/** Tarjeta del tablero asignada a la persona (puente «Mis tareas», T·3). */
+/**
+ * Tarjeta del tablero que le importa a la persona (puente «Mis tareas»):
+ * o está asignada a ella (`mia`) o la creó ella y la sigue hasta que se
+ * termine, aunque la haga otro (decisión Javi, 16 sep 2026).
+ */
 export type TarjetaMia = Pick<
   Tarjeta,
-  "id" | "titulo" | "proyecto_id" | "estado" | "posicion"
->;
+  "id" | "titulo" | "proyecto_id" | "estado" | "posicion" | "creada_por"
+> & {
+  /** Asignada a la persona (trabajo suyo). */
+  mia: boolean;
+  /** Nombres de quienes la tienen asignada; vacío = sin coger. */
+  asignados: string[];
+};
 
 export interface DatosMiSemana {
   persona: Persona;
@@ -105,6 +114,7 @@ export async function cargarMiSemana(
     vacacionesRes,
     tarjetasRes,
     asignacionesRes,
+    equipoRes,
   ] = await Promise.all([
     supabase.from("clientes").select("*").eq("activo", true).order("nombre"),
     supabase.from("proyectos").select("*").order("nombre"),
@@ -133,16 +143,16 @@ export async function cargarMiSemana(
       .eq("persona_id", persona.id)
       .lte("desde", diasSemanaAnterior[4])
       .gte("hasta", diasSemanaAnterior[0]),
-    // «Mis tareas»: dos consultas en paralelo (todas las no-hechas + mis
-    // asignaciones) y el cruce en memoria — evita un round-trip secuencial.
+    // «Mis tareas»: consultas en paralelo (todas las no-hechas, todas las
+    // asignaciones y el equipo) y el cruce en memoria — evita round-trips
+    // secuenciales. Las asignaciones van completas porque una tarjeta
+    // creada por la persona muestra quién la ha cogido.
     supabase
       .from("tarjetas")
-      .select("id, titulo, proyecto_id, estado, posicion")
+      .select("id, titulo, proyecto_id, estado, posicion, creada_por")
       .neq("estado", "hecha"),
-    supabase
-      .from("tarjeta_asignaciones")
-      .select("tarjeta_id")
-      .eq("persona_id", persona.id),
+    supabase.from("tarjeta_asignaciones").select("tarjeta_id, persona_id"),
+    supabase.from("personas").select("id, nombre").eq("activo", true),
   ]);
 
   const clientes = clientesRes.data ?? [];
@@ -203,12 +213,29 @@ export async function cargarMiSemana(
       !vacacionesSemanaAnterior.some((v) => v.desde <= d && d <= v.hasta),
   ).length;
 
-  const misIds = new Set(
-    (asignacionesRes.data ?? []).map((a) => a.tarjeta_id),
+  // Mías = asignadas a mí, o creadas por mí (las sigo hasta el final).
+  const nombrePorPersona = new Map(
+    (equipoRes.data ?? []).map((p) => [p.id, p.nombre]),
   );
-  const misTarjetas = (tarjetasRes.data ?? []).filter((t) =>
-    misIds.has(t.id),
-  );
+  const asignadosPorTarjeta = new Map<string, string[]>();
+  const misIds = new Set<string>();
+  for (const a of asignacionesRes.data ?? []) {
+    if (a.persona_id === persona.id) misIds.add(a.tarjeta_id);
+    const nombre = nombrePorPersona.get(a.persona_id);
+    if (!nombre) continue;
+    const lista = asignadosPorTarjeta.get(a.tarjeta_id);
+    if (lista) lista.push(nombre);
+    else asignadosPorTarjeta.set(a.tarjeta_id, [nombre]);
+  }
+  const misTarjetas: TarjetaMia[] = (tarjetasRes.data ?? [])
+    .filter((t) => misIds.has(t.id) || t.creada_por === persona.id)
+    .map((t) => ({
+      ...t,
+      mia: misIds.has(t.id),
+      asignados: (asignadosPorTarjeta.get(t.id) ?? []).sort((a, b) =>
+        a.localeCompare(b, "es"),
+      ),
+    }));
 
   return {
     persona,

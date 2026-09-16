@@ -985,8 +985,10 @@ export function RejillaSemana({
   // copia: proyecto + título como tarea) — alimenta el check de la fila.
   const tarjetaPorLinea = useMemo(() => {
     const m = new Map<string, TarjetaMia>();
+    // Solo las asignadas a mí: una tarjeta que creé para otro no es mi
+    // trabajo, y su check no debe aparecer en mi fila.
     for (const t of tarjetasMias)
-      m.set(idLinea(t.proyecto_id, limpiarTarea(t.titulo)), t);
+      if (t.mia) m.set(idLinea(t.proyecto_id, limpiarTarea(t.titulo)), t);
     return m;
   }, [tarjetasMias]);
 

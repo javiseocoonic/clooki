@@ -442,7 +442,7 @@ function FormularioTarjeta({
                     : "border-borde text-texto-suave hover:border-borde-fuerte hover:text-tinta"
                 }`}
               >
-                {esYo ? `${p.nombre} (yo)` : p.nombre}
+                {esYo ? `${p.nombre} (la hago yo)` : p.nombre}
               </button>
             );
           })}
@@ -1968,6 +1968,17 @@ export function Tablero({
           <p className="text-xs text-texto-suave">
             <span className="font-medium text-texto">Asignada a: </span>
             {asignadosTexto}
+          </p>
+
+          {/* Creador ≠ asignados: quien la crea la sigue hasta el final
+              (la ve en Mis tareas) aunque la haga otra persona. */}
+          <p className="text-xs text-texto-suave">
+            <span className="font-medium text-texto">Creada por: </span>
+            {t.creada_por === personaId
+              ? "ti"
+              : (nombrePersona.get(t.creada_por) ?? "?")}
+            {" · "}
+            {etiquetaFechaCorta(t.creada_en.slice(0, 10))}
           </p>
 
           {(t.urgente || t.fecha_limite) && (

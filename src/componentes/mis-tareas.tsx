@@ -70,52 +70,71 @@ export function MisTareas({
 
   // Tarjetas con proyecto activo, agrupadas por cliente. Dentro de cada
   // grupo: en curso primero (lo que vienes a continuar), luego pendientes;
-  // a igualdad, el orden del tablero.
-  const grupos = useMemo(() => {
-    const resueltas = tarjetas.flatMap((t) => {
-      const r = porProyecto.get(t.proyecto_id);
-      return r ? [{ t, ...r }] : [];
-    });
-    const porCliente = new Map<string, typeof resueltas>();
-    for (const r of resueltas) {
-      const lista = porCliente.get(r.cliente.id);
-      if (lista) lista.push(r);
-      else porCliente.set(r.cliente.id, [r]);
-    }
-    const peso = { en_curso: 0, pendiente: 1, hecha: 2 } as const;
-    return [...porCliente.values()]
-      .map((lista) =>
-        lista.sort(
-          (a, b) =>
-            peso[a.t.estado] - peso[b.t.estado] ||
-            a.t.posicion - b.t.posicion,
-        ),
-      )
-      .sort((a, b) =>
-        a[0].cliente.nombre.localeCompare(b[0].cliente.nombre, "es"),
-      );
-  }, [tarjetas, porProyecto]);
+  // a igualdad, el orden del tablero. Dos bloques: las asignadas a mí (mi
+  // trabajo) y las que creé para otros y sigo hasta que se terminen.
+  const agrupar = useMemo(
+    () => (lista: TarjetaMia[]) => {
+      const resueltas = lista.flatMap((t) => {
+        const r = porProyecto.get(t.proyecto_id);
+        return r ? [{ t, ...r }] : [];
+      });
+      const porCliente = new Map<string, typeof resueltas>();
+      for (const r of resueltas) {
+        const l = porCliente.get(r.cliente.id);
+        if (l) l.push(r);
+        else porCliente.set(r.cliente.id, [r]);
+      }
+      const peso = { en_curso: 0, pendiente: 1, hecha: 2 } as const;
+      return [...porCliente.values()]
+        .map((g) =>
+          g.sort(
+            (a, b) =>
+              peso[a.t.estado] - peso[b.t.estado] ||
+              a.t.posicion - b.t.posicion,
+          ),
+        )
+        .sort((a, b) =>
+          a[0].cliente.nombre.localeCompare(b[0].cliente.nombre, "es"),
+        );
+    },
+    [porProyecto],
+  );
+  const gruposMias = useMemo(
+    () => agrupar(tarjetas.filter((t) => t.mia)),
+    [agrupar, tarjetas],
+  );
+  const gruposCreadas = useMemo(
+    () => agrupar(tarjetas.filter((t) => !t.mia)),
+    [agrupar, tarjetas],
+  );
+  type Grupos = ReturnType<typeof agrupar>;
 
-  const n = grupos.reduce((s, g) => s + g.length, 0);
+  const nMias = gruposMias.reduce((s, g) => s + g.length, 0);
+  const nCreadas = gruposCreadas.reduce((s, g) => s + g.length, 0);
+  const n = nMias + nCreadas;
   const existentes = new Set(clavesExistentes);
 
   // Buscador (como en «+ Añadir línea»): filtra por título de la tarjeta,
   // proyecto o cliente, sin distinguir acentos ni mayúsculas.
-  const gruposVisibles = useMemo(() => {
-    const aguja = normalizar(busqueda.trim());
-    if (aguja === "") return grupos;
-    return grupos
-      .map((grupo) =>
-        grupo.filter(
-          ({ t, proyecto, cliente }) =>
-            normalizar(t.titulo).includes(aguja) ||
-            normalizar(proyecto.nombre).includes(aguja) ||
-            normalizar(cliente.nombre).includes(aguja),
-        ),
-      )
-      .filter((grupo) => grupo.length > 0);
-  }, [grupos, busqueda]);
-  const nVisibles = gruposVisibles.reduce((s, g) => s + g.length, 0);
+  const aguja = normalizar(busqueda.trim());
+  const filtrar = (grupos: Grupos): Grupos =>
+    aguja === ""
+      ? grupos
+      : grupos
+          .map((grupo) =>
+            grupo.filter(
+              ({ t, proyecto, cliente }) =>
+                normalizar(t.titulo).includes(aguja) ||
+                normalizar(proyecto.nombre).includes(aguja) ||
+                normalizar(cliente.nombre).includes(aguja),
+            ),
+          )
+          .filter((grupo) => grupo.length > 0);
+  const miasVisibles = filtrar(gruposMias);
+  const creadasVisibles = filtrar(gruposCreadas);
+  const nVisibles =
+    miasVisibles.reduce((s, g) => s + g.length, 0) +
+    creadasVisibles.reduce((s, g) => s + g.length, 0);
 
   // ── Automatismo pendiente → en curso ──
 
@@ -272,8 +291,44 @@ export function MisTareas({
               Ninguna tarea coincide
             </p>
           ) : (
+          <>
+          {miasVisibles.length > 0 && creadasVisibles.length > 0 && (
+            <p className="px-1 pt-2 text-xs font-semibold text-tinta">
+              Asignadas a mí
+            </p>
+          )}
+          {listaGrupos(miasVisibles, false)}
+          {creadasVisibles.length > 0 && (
+            <>
+              <p className="mt-2 border-t border-borde px-1 pt-2 text-xs font-semibold text-tinta">
+                Creadas por mí
+                <span className="ml-1 font-normal text-texto-suave">
+                  · las llevan otros, las sigues hasta que se terminen
+                </span>
+              </p>
+              {listaGrupos(creadasVisibles, true)}
+            </>
+          )}
+          </>
+          )}
+          <p className="mt-2 border-t border-borde px-1 pt-2 text-xs text-texto-suave">
+            <Link
+              href="/tareas"
+              className="font-medium text-acento hover:underline focus-visible:outline-2 focus-visible:outline-acento"
+            >
+              Ir al tablero →
+            </Link>
+          </p>
+        </>
+      )}
+    </div>
+  );
+
+  /** Lista agrupada por cliente; `creadas` muestra quién la tiene. */
+  function listaGrupos(grupos: Grupos, creadas: boolean) {
+    return (
           <ul className="flex flex-col">
-            {gruposVisibles.map((grupo) => (
+            {grupos.map((grupo) => (
               <li key={grupo[0].cliente.id}>
                 <p className="px-1 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-texto-suave">
                   {grupo[0].cliente.nombre}
@@ -303,8 +358,17 @@ export function MisTareas({
                             </span>
                             <span className="block truncate text-xs text-texto-suave">
                               {proyecto.nombre}
+                              {creadas &&
+                                (t.asignados.length > 0
+                                  ? ` · ${t.asignados.join(", ")}`
+                                  : "")}
                             </span>
                           </span>
+                          {creadas && t.asignados.length === 0 && (
+                            <span className="shrink-0 rounded-full bg-aviso-suave px-2 py-0.5 text-[11px] font-medium text-aviso">
+                              Sin coger
+                            </span>
+                          )}
                           {t.estado === "en_curso" && (
                             <span className="shrink-0 rounded-full bg-acento-suave px-2 py-0.5 text-[11px] font-medium text-acento">
                               En curso
@@ -338,17 +402,6 @@ export function MisTareas({
               </li>
             ))}
           </ul>
-          )}
-          <p className="mt-2 border-t border-borde px-1 pt-2 text-xs text-texto-suave">
-            <Link
-              href="/tareas"
-              className="font-medium text-acento hover:underline focus-visible:outline-2 focus-visible:outline-acento"
-            >
-              Ir al tablero →
-            </Link>
-          </p>
-        </>
-      )}
-    </div>
-  );
+    );
+  }
 }
