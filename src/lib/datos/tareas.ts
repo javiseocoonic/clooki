@@ -6,6 +6,7 @@ import type {
   SesionCronometro,
   Tarjeta,
   TarjetaCheck,
+  TarjetaComentario,
 } from "@/lib/tipos";
 
 /** Días tras «hecha» antes de ocultarse del tablero (roadmap §7.2). */
@@ -25,6 +26,10 @@ export interface DatosTareas {
   tarjetas: TarjetaTablero[];
   /** Subtareas de todas las tarjetas cargadas (el tablero las agrupa). */
   checks: TarjetaCheck[];
+  /** Hilo de comentarios de todas las tarjetas, en orden cronológico.
+   *  null = la tabla aún no existe (migración 019 sin ejecutar): el
+   *  tablero oculta la sección en vez de ofrecer algo que fallaría. */
+  comentarios: TarjetaComentario[] | null;
   /** Cronómetros activos de la persona (bandeja de la cabecera). */
   sesiones: SesionCronometro[];
 }
@@ -72,6 +77,7 @@ export async function cargarTareas(
     tarjetasRes,
     asignacionesRes,
     checksRes,
+    comentariosRes,
     sesionesRes,
   ] = await Promise.all([
     supabase.from("clientes").select("*").eq("activo", true).order("nombre"),
@@ -84,6 +90,11 @@ export async function cargarTareas(
     consultaTarjetas.order("posicion").order("creada_en"),
     supabase.from("tarjeta_asignaciones").select("*"),
     supabase.from("tarjeta_checks").select("*").order("posicion"),
+    supabase
+      .from("tarjeta_comentarios")
+      .select("*")
+      .order("creada_en")
+      .range(0, 9999),
     supabase
       .from("cronometros")
       .select("*")
@@ -112,6 +123,7 @@ export async function cargarTareas(
       asignados: asignadosPorTarjeta.get(t.id) ?? [],
     })),
     checks: checksRes.data ?? [],
+    comentarios: comentariosRes.error ? null : (comentariosRes.data ?? []),
     sesiones: sesionesRes.data ?? [],
   };
 }

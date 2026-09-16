@@ -112,6 +112,17 @@ export type TarjetaCheck = {
   creada_en: string;
 }
 
+/** Comentario del hilo de una tarjeta (019). Las menciones van en el
+ *  texto como «@Nombre Apellido» y, además, por id en `menciones`. */
+export type TarjetaComentario = {
+  id: string;
+  tarjeta_id: string;
+  persona_id: string;
+  texto: string;
+  menciones: string[];
+  creada_en: string;
+}
+
 /* ── Wordle semanal (fase Cuco) ── */
 
 export type ColorPista = "correcto" | "presente" | "ausente";
@@ -242,6 +253,13 @@ export type Database = {
             | "urgente"
           >
         >;
+        Relationships: [];
+      };
+      tarjeta_comentarios: {
+        Row: TarjetaComentario;
+        Insert: Pick<TarjetaComentario, "tarjeta_id" | "persona_id" | "texto"> &
+          Partial<Pick<TarjetaComentario, "id" | "menciones" | "creada_en">>;
+        Update: Partial<Pick<TarjetaComentario, "texto" | "menciones">>;
         Relationships: [];
       };
       tarjeta_checks: {

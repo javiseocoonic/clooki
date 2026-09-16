@@ -23,6 +23,7 @@ import type {
   Persona,
   Proyecto,
   TarjetaCheck,
+  TarjetaComentario,
 } from "@/lib/tipos";
 
 type ClienteConProyectos = Cliente & { proyectos: Proyecto[] };
@@ -504,6 +505,242 @@ function FormularioNuevoCheck({ alCrear }: { alCrear: (texto: string) => void })
   );
 }
 
+/* ── Comentarios ───────────────────────────────────────────────── */
+
+/** «16 sep, 10:42» (año solo si no es el actual). */
+function fechaHoraCorta(iso: string): string {
+  const d = new Date(iso);
+  const mismoAno = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleString("es-ES", {
+    day: "numeric",
+    month: "short",
+    ...(mismoAno ? {} : { year: "numeric" }),
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function escaparRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Regex que casa «@Nombre Apellido» de cualquier miembro (largos primero). */
+function regexMenciones(equipo: MiembroEquipo[]): RegExp | null {
+  if (equipo.length === 0) return null;
+  const nombres = [...equipo]
+    .map((p) => p.nombre)
+    .sort((a, b) => b.length - a.length)
+    .map(escaparRegex);
+  return new RegExp(`@(${nombres.join("|")})`, "g");
+}
+
+/** Ids de las personas cuyo «@Nombre» aparece en el texto. */
+function mencionesEn(texto: string, equipo: MiembroEquipo[]): string[] {
+  const re = regexMenciones(equipo);
+  if (!re) return [];
+  const ids = new Set<string>();
+  for (const m of texto.matchAll(re)) {
+    const p = equipo.find((x) => x.nombre === m[1]);
+    if (p) ids.add(p.id);
+  }
+  return [...ids];
+}
+
+/** Texto del comentario con las menciones resaltadas. */
+function TextoConMenciones({
+  texto,
+  equipo,
+}: {
+  texto: string;
+  equipo: MiembroEquipo[];
+}) {
+  const re = regexMenciones(equipo);
+  if (!re) return <>{texto}</>;
+  const trozos: React.ReactNode[] = [];
+  let ultimo = 0;
+  for (const m of texto.matchAll(re)) {
+    const inicio = m.index ?? 0;
+    if (inicio > ultimo) trozos.push(texto.slice(ultimo, inicio));
+    trozos.push(
+      <span
+        key={`${inicio}-${m[1]}`}
+        className="rounded bg-acento-suave px-1 font-medium text-acento"
+      >
+        @{m[1]}
+      </span>,
+    );
+    ultimo = inicio + m[0].length;
+  }
+  if (ultimo < texto.length) trozos.push(texto.slice(ultimo));
+  return <>{trozos}</>;
+}
+
+/**
+ * Redactor de comentario con menciones: al escribir «@» (o «@Nom») se
+ * despliega la lista del equipo filtrada; elegir a alguien inserta
+ * «@Nombre Apellido ». Enter envía; Shift+Enter salta de línea.
+ */
+function FormularioComentario({
+  equipo,
+  alEnviar,
+}: {
+  equipo: MiembroEquipo[];
+  alEnviar: (texto: string) => Promise<void>;
+}) {
+  const [texto, setTexto] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [sugerencia, setSugerencia] = useState<{
+    inicio: number;
+    consulta: string;
+    indice: number;
+  } | null>(null);
+  const areaRef = useRef<HTMLTextAreaElement>(null);
+
+  const candidatos = sugerencia
+    ? equipo
+        .filter((p) =>
+          normalizar(p.nombre).includes(normalizar(sugerencia.consulta)),
+        )
+        .slice(0, 6)
+    : [];
+
+  /** Detecta «@consulta» justo antes del cursor. */
+  function actualizarSugerencia(valor: string, cursor: number) {
+    const antes = valor.slice(0, cursor);
+    const m = antes.match(/(?:^|\s)@([^\s@]{0,30})$/);
+    if (!m) {
+      setSugerencia(null);
+      return;
+    }
+    setSugerencia({
+      inicio: cursor - m[1].length - 1,
+      consulta: m[1],
+      indice: 0,
+    });
+  }
+
+  function elegir(p: MiembroEquipo) {
+    if (!sugerencia) return;
+    const area = areaRef.current;
+    const cursor = area?.selectionStart ?? texto.length;
+    const nuevo = `${texto.slice(0, sugerencia.inicio)}@${p.nombre} ${texto.slice(cursor)}`;
+    setTexto(nuevo);
+    setSugerencia(null);
+    const pos = sugerencia.inicio + p.nombre.length + 2;
+    requestAnimationFrame(() => {
+      area?.focus();
+      area?.setSelectionRange(pos, pos);
+    });
+  }
+
+  async function enviar() {
+    const limpio = texto.trim();
+    if (!limpio || enviando) return;
+    setEnviando(true);
+    try {
+      await alEnviar(limpio);
+      setTexto("");
+      setSugerencia(null);
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void enviar();
+      }}
+      className="relative flex flex-col gap-1.5"
+    >
+      <label className="sr-only" htmlFor="nuevo-comentario">
+        Nuevo comentario
+      </label>
+      <textarea
+        ref={areaRef}
+        id="nuevo-comentario"
+        rows={2}
+        maxLength={2000}
+        placeholder="Escribe un comentario… usa @ para mencionar"
+        value={texto}
+        onChange={(e) => {
+          setTexto(e.target.value);
+          actualizarSugerencia(e.target.value, e.target.selectionStart ?? 0);
+        }}
+        onKeyDown={(e) => {
+          if (sugerencia && candidatos.length > 0) {
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              const paso = e.key === "ArrowDown" ? 1 : -1;
+              setSugerencia({
+                ...sugerencia,
+                indice:
+                  (sugerencia.indice + paso + candidatos.length) %
+                  candidatos.length,
+              });
+              return;
+            }
+            if (e.key === "Enter" || e.key === "Tab") {
+              e.preventDefault();
+              elegir(candidatos[sugerencia.indice]);
+              return;
+            }
+            if (e.key === "Escape") {
+              setSugerencia(null);
+              return;
+            }
+          }
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            void enviar();
+          }
+        }}
+        className="min-h-16 w-full resize-y rounded-md border border-borde bg-superficie px-2 py-1.5 text-sm text-tinta outline-none placeholder:text-texto-suave focus:border-acento focus:ring-2 focus:ring-acento/20"
+      />
+      {sugerencia && candidatos.length > 0 && (
+        <ul
+          role="listbox"
+          aria-label="Mencionar a"
+          className="absolute left-0 top-full z-10 mt-1 w-64 overflow-hidden rounded-md border border-borde bg-superficie shadow-lg"
+        >
+          {candidatos.map((p, i) => (
+            <li key={p.id} role="option" aria-selected={i === sugerencia.indice}>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => elegir(p)}
+                className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm ${
+                  i === sugerencia.indice
+                    ? "bg-acento-suave text-acento"
+                    : "text-texto hover:bg-superficie-2"
+                }`}
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-borde bg-superficie-2 text-[10px] font-semibold">
+                  {iniciales(p.nombre)}
+                </span>
+                {p.nombre}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] text-texto-suave">
+          Enter envía · Shift+Enter salta de línea
+        </span>
+        <button
+          type="submit"
+          disabled={texto.trim().length === 0 || enviando}
+          className="h-8 shrink-0 rounded-md border border-borde-fuerte px-2.5 text-xs font-medium text-texto transition-colors hover:border-acento hover:text-acento focus-visible:outline-2 focus-visible:outline-acento disabled:opacity-40"
+        >
+          {enviando ? "Enviando…" : "Comentar"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 /* ── Tablero ───────────────────────────────────────────────────── */
 
 export function Tablero({
@@ -513,6 +750,7 @@ export function Tablero({
   equipo,
   tarjetasIniciales,
   checksIniciales,
+  comentariosIniciales,
   verArchivadas,
 }: {
   personaId: string;
@@ -521,12 +759,16 @@ export function Tablero({
   equipo: MiembroEquipo[];
   tarjetasIniciales: TarjetaTablero[];
   checksIniciales: TarjetaCheck[];
+  /** null = hilo no disponible todavía (tabla sin crear); se oculta. */
+  comentariosIniciales: TarjetaComentario[] | null;
   verArchivadas: boolean;
 }) {
   const supabase = useMemo(() => crearClienteNavegador(), []);
   const crono = useCronometros();
   const [tarjetas, setTarjetas] = useState(tarjetasIniciales);
   const [checks, setChecks] = useState(checksIniciales);
+  const hiloDisponible = comentariosIniciales !== null;
+  const [comentarios, setComentarios] = useState(comentariosIniciales ?? []);
   const [anuncio, setAnuncio] = useState("");
   const [creandoEn, setCreandoEn] = useState<string | null>(null);
   const [editando, setEditando] = useState<string | null>(null);
@@ -1092,6 +1334,46 @@ export function Tablero({
       return;
     }
     setChecks((prev) => prev.filter((x) => x.id !== c.id));
+  }
+
+  /* ── Comentarios (hilo) ── */
+
+  function comentariosDe(tarjetaId: string): TarjetaComentario[] {
+    return comentarios
+      .filter((c) => c.tarjeta_id === tarjetaId)
+      .sort((a, b) => a.creada_en.localeCompare(b.creada_en));
+  }
+
+  async function crearComentario(tarjetaId: string, texto: string) {
+    const limpio = texto.trim().slice(0, 2000).trim();
+    if (!limpio) return;
+    const { data, error } = await supabase
+      .from("tarjeta_comentarios")
+      .insert({
+        tarjeta_id: tarjetaId,
+        persona_id: personaId,
+        texto: limpio,
+        menciones: mencionesEn(limpio, equipo),
+      })
+      .select()
+      .single();
+    if (error || !data) {
+      setAnuncio("No se pudo publicar el comentario.");
+      throw new Error(error?.message ?? "sin datos");
+    }
+    setComentarios((prev) => [...prev, data]);
+  }
+
+  async function borrarComentario(c: TarjetaComentario) {
+    const { error } = await supabase
+      .from("tarjeta_comentarios")
+      .delete()
+      .eq("id", c.id);
+    if (error) {
+      setAnuncio("No se pudo borrar el comentario.");
+      return;
+    }
+    setComentarios((prev) => prev.filter((x) => x.id !== c.id));
   }
 
   /**
@@ -1714,6 +1996,67 @@ export function Tablero({
           )}
 
           {seccionChecks(t)}
+
+          {/* Hilo de comentarios: debajo de descripción y subtareas.
+              Escribe cualquiera del equipo; borra el autor o un admin
+              (policies de la 019). */}
+          {hiloDisponible && (
+          <div className="flex flex-col gap-2 border-t border-borde pt-3">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-texto-suave">
+              Comentarios
+              {comentariosDe(t.id).length > 0 &&
+                ` · ${comentariosDe(t.id).length}`}
+            </p>
+            {comentariosDe(t.id).length > 0 && (
+              <ul className="flex flex-col gap-2">
+                {comentariosDe(t.id).map((c) => {
+                  const autor = nombrePersona.get(c.persona_id) ?? "?";
+                  const puedeBorrar = esAdmin || c.persona_id === personaId;
+                  return (
+                    <li key={c.id} className="flex gap-2">
+                      <span
+                        title={autor}
+                        className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-borde bg-superficie-2 text-[10px] font-semibold text-texto"
+                      >
+                        {iniciales(autor)}
+                      </span>
+                      <div className="min-w-0 flex-1 rounded-md bg-superficie-2 px-2.5 py-1.5">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xs font-semibold text-tinta">
+                            {autor}
+                          </span>
+                          <time
+                            dateTime={c.creada_en}
+                            className="text-[11px] text-texto-suave"
+                          >
+                            {fechaHoraCorta(c.creada_en)}
+                          </time>
+                          {puedeBorrar && (
+                            <button
+                              type="button"
+                              onClick={() => void borrarComentario(c)}
+                              aria-label={`Borrar comentario de ${autor}`}
+                              className="ml-auto flex h-5 w-5 shrink-0 items-center justify-center rounded text-texto-suave transition-colors hover:bg-superficie hover:text-error focus-visible:outline-2 focus-visible:outline-acento"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-texto">
+                          <TextoConMenciones texto={c.texto} equipo={equipo} />
+                        </p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <FormularioComentario
+              equipo={equipo}
+              alEnviar={(texto) => crearComentario(t.id, texto)}
+            />
+          </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-1.5 border-t border-borde pt-3">
             <button
