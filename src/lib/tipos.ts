@@ -125,6 +125,19 @@ export type TarjetaComentario = {
   creada_en: string;
 }
 
+/** Aviso para una persona (019): la crean triggers al mencionarla en un
+ *  comentario o al asignarle una tarjeta. `leida_en` null = sin leer. */
+export type Notificacion = {
+  id: string;
+  persona_id: string;
+  tipo: "mencion" | "asignacion";
+  tarjeta_id: string;
+  comentario_id: string | null;
+  origen_id: string | null;
+  creada_en: string;
+  leida_en: string | null;
+}
+
 /* ── Wordle semanal (fase Cuco) ── */
 
 export type ColorPista = "correcto" | "presente" | "ausente";
@@ -255,6 +268,13 @@ export type Database = {
             | "urgente"
           >
         >;
+        Relationships: [];
+      };
+      notificaciones: {
+        Row: Notificacion;
+        // Las crean triggers; la app solo marca leídas y borra.
+        Insert: never;
+        Update: Partial<Pick<Notificacion, "leida_en">>;
         Relationships: [];
       };
       tarjeta_comentarios: {

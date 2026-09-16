@@ -794,6 +794,7 @@ export function Tablero({
   comentariosIniciales,
   verArchivadas,
   detalleInicial = null,
+  comentarioInicial = null,
 }: {
   personaId: string;
   esAdmin: boolean;
@@ -806,6 +807,9 @@ export function Tablero({
   verArchivadas: boolean;
   /** Tarjeta cuyo detalle se abre al cargar (viene de ?tarjeta=id). */
   detalleInicial?: string | null;
+  /** Comentario a resaltar dentro del detalle (viene de ?comentario=id,
+   *  desde la campana de avisos). */
+  comentarioInicial?: string | null;
 }) {
   const supabase = useMemo(() => crearClienteNavegador(), []);
   const crono = useCronometros();
@@ -918,6 +922,13 @@ export function Tablero({
     };
   }, [detalle]);
   useFocoAtrapado(detalle !== null, dialogoRef);
+
+  // Llegada desde un aviso de mención: desplazar hasta el comentario.
+  useEffect(() => {
+    if (!detalle || !comentarioInicial) return;
+    const el = document.getElementById(`comentario-${comentarioInicial}`);
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [detalle, comentarioInicial]);
 
   // Tipos de trabajo = nombres de proyecto distintos (Audiovisual,
   // Consultoría, Desarrollo web…). El tipo es un atributo de la tarea —
@@ -2113,7 +2124,15 @@ export function Tablero({
                   const autor = nombrePersona.get(c.persona_id) ?? "?";
                   const puedeBorrar = esAdmin || c.persona_id === personaId;
                   return (
-                    <li key={c.id} className="flex gap-2">
+                    <li
+                      key={c.id}
+                      id={`comentario-${c.id}`}
+                      className={`flex gap-2 rounded-md ${
+                        c.id === comentarioInicial
+                          ? "ring-2 ring-acento ring-offset-2 ring-offset-superficie"
+                          : ""
+                      }`}
+                    >
                       <span
                         title={autor}
                         className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-borde bg-superficie-2 text-[10px] font-semibold text-texto"

@@ -15,9 +15,10 @@ export default async function PaginaTareas({
 }: {
   searchParams: Promise<{ [clave: string]: string | string[] | undefined }>;
 }) {
-  const { archivadas, tarjeta } = await searchParams;
+  const { archivadas, tarjeta, comentario } = await searchParams;
   const verArchivadas = archivadas === "1";
   const detalleInicial = typeof tarjeta === "string" ? tarjeta : null;
+  const comentarioInicial = typeof comentario === "string" ? comentario : null;
 
   const datos = await cargarTareas(verArchivadas);
   if (!datos) redirect("/");
@@ -47,6 +48,7 @@ export default async function PaginaTareas({
             comentariosIniciales={datos.comentarios}
             verArchivadas={verArchivadas}
             detalleInicial={detalleInicial}
+            comentarioInicial={comentarioInicial}
           />
         </main>
       </div>

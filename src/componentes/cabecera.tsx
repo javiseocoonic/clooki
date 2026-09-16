@@ -2,7 +2,9 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Persona } from "@/lib/tipos";
 import { cerrarSesion } from "@/app/login/acciones";
+import { cargarNotificaciones } from "@/lib/datos/notificaciones";
 import { Logotipo } from "@/componentes/logotipo";
+import { Notificaciones } from "@/componentes/notificaciones";
 
 const ESTILO_NAV =
   "rounded-lg px-2.5 py-1.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-acento";
@@ -20,7 +22,7 @@ function claseEnlace(activo: boolean): string {
  * `children` es el hueco de la bandeja de cronómetros (client), que la
  * página inyecta dentro de su ProveedorCronometros.
  */
-export function Cabecera({
+export async function Cabecera({
   persona,
   seccion,
   children,
@@ -29,6 +31,8 @@ export function Cabecera({
   seccion: "semana" | "tareas" | "vacaciones" | "resumen" | "gestion";
   children?: ReactNode;
 }) {
+  // null = tabla sin crear (019): la campana no se muestra.
+  const avisos = await cargarNotificaciones(persona.id);
   return (
     <header className="flex items-center gap-2 border-b border-borde pb-3">
       <Link
@@ -46,6 +50,9 @@ export function Cabecera({
         <Link href="/tareas" className={claseEnlace(seccion === "tareas")}>
           Tareas
         </Link>
+        {avisos !== null && (
+          <Notificaciones iniciales={avisos} claseEnlace={claseEnlace(false)} />
+        )}
         <Link
           href="/vacaciones"
           className={claseEnlace(seccion === "vacaciones")}
