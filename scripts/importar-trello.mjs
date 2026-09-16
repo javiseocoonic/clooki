@@ -58,6 +58,7 @@ const EMAIL_IMPORTADOR = process.env.IMPORTADOR_EMAIL ?? "jfernandez@coonic.com"
 const PROYECTO_POR_TABLERO = new Map([
   ["Coonic | Audiovisual", "Audiovisual"],
   ["Coonic | Diseño", "Diseño"],
+  ["Coonic | WEB", "Desarrollo web"],
 ]);
 
 // ---------- Alias ----------
@@ -84,7 +85,7 @@ const ALIAS_CLIENTES = [
   [/CANAL MALAGA/, "Canal Málaga"],
   [/BENDITA ?KATALI\w*/, "Bendita Katalina"],
   [/\bRUT\b/, "Rut"],
-  [/FAY ?HOTEL|FAY ?VICTORIA\w*/, "Fayhotel"],
+  [/FAY ?HOTEL|FAY ?VICTORIA\w*|^FAY\b|\bWEB FAY\b/, "Fayhotel"],
   [/B BOU( HOTEL)?/, "B Bou Hotel"],
   [/ANORETA( ?GOLF)?/, "Añoreta Golf"],
   [/JUNTA( DE)? ANDALUCIA/, "Junta de Andalucía"],
@@ -105,7 +106,7 @@ const ALIAS_CLIENTES = [
   [/ZORROCALLAO/, "Zorrocallao"],
   [/CORDIA/, "Cordia Formación"],
   [/MENDALERENDA/, "Mendalerenda"],
-  [/GUAJES/, "Guajes"],
+  [/GUAJES?\b/, "Guajes"],
   // ---- Añadidos para el tablero de Diseño (jul 2026) ----
   [/AEHCOS/, "Aehcos"],
   [/JUSTICIA/, "Justicia"],
@@ -137,6 +138,17 @@ const ALIAS_CLIENTES = [
   // ---- Añadidos en la sincronización de Audiovisual (sep 2026) ----
   [/ASOCIACION CONTRA EL CANCER( DE)?( MARBELLA)?|\bAECC\b/, "Asociación contra el Cáncer Marbella"],
   [/FUNDACION LY COMPANY|\bLY COMPANY\b/, "Fundación LY Company"],
+  // ---- Añadidos para el tablero WEB (sep 2026) ----
+  [/ANTIGUA CASA DE GUARDIA/, "Antigua Casa de Guardia"],
+  [/ALPHABIO/, "Alphabio Iberia"],
+  [/ELINGENIO/, "El Ingenio"],
+  [/FARFAN/, "Farfán estudio"],
+  [/GREENING|LIDERA ENERGIA/, "Greening"],
+  [/SERVILIMPCE|LIMPIEZA CEUTA/, "Limpieza Ceuta"],
+  [/CIUDAD CORRESPONSABLE/, "Ayuntamiento de Málaga"],
+  [/VIAMED|VIANEXO|\bVAULT\b/, "Viamed"],
+  [/\bAPECOM\b/, "Apecom"],
+  [/HOSPITAL REGIONAL/, "Hospital Regional Universitario"],
   // Genéricos al final a propósito: que primero casen los específicos
   // («AYTO. TURISMO» → Turismo de Málaga, «JUNTA ANDALUCÍA», TCS…).
   [/\bAYTO\b/, "Ayuntamiento de Málaga"],
@@ -162,6 +174,14 @@ const CLIENTE_MANUAL = new Map([
   ["MKSmbizK", "Coonic (interno)"], // Teaser cumpleaños Javi Hurtado
   ["7UYAOFgl", "Coonic (interno)"], // Hospital · vídeo residentes
   ["2xMYKhka", "Coonic (interno)"], // FAMTrip · cambiar formato
+  // WEB, sep 2026.
+  ["jiyanVMd", "Alphabio Iberia"], // solo un enlace a la tarjeta de Alphabio
+  ["fV8B1Qi7", "Coonic (interno)"], // Traducción EN IFV
+  ["oG22WJrk", "Coonic (interno)"], // Kit Digital · subsanación
+  ["cP39uMIT", "Coonic (interno)"], // Repositorio normativas
+  ["aNSOpZkE", "Coonic (interno)"], // Banner en publicaciones
+  ["tiIJiEAx", "Coonic (interno)"], // Gálvez cambios
+  ["ORDsyCSM", "Coonic (interno)"], // Transferencia ARGCISA
 ]);
 
 // Lista de Trello con nombre de persona → palabras que deben aparecer
@@ -177,6 +197,10 @@ const LISTA_PERSONA = new Map([
   ["CARLOS", ["CARLOS"]],
   ["ANDRES", ["ANDRES"]],
   ["ALICE", ["ALICE"]],
+  // Tablero WEB
+  ["JAVIER", ["JAVIER FERNANDEZ"]],
+  ["ALBERTO", ["ALBERTO"]],
+  ["PEPOTE", ["PEPE SALES"]],
 ]);
 
 // Miembro de Trello → nombre en Clooki, para los casos que el cruce
@@ -187,13 +211,23 @@ const ALIAS_PERSONAS = new Map([
   ["JOSE CASADO", "JOSE MANUEL CASADO"],
   ["FRANCISCO RAMON PEREZ GARRIDO", "RAMON PEREZ"],
   ["MCASTANOS", "MERCEDES"],
+  ["ALICE", "ALICE BERTHOUD"],
+  ["ALBERTO MOYANO SANCHEZ", "ALBERTO MOYANO"],
 ]);
 
 // Personas del Trello que ya no están en el equipo (Javi, 16 sep 2026):
 // no se les asigna nada aunque exista una ficha con la que casen (ni
 // por miembro ni por lista con su nombre). Sus menciones @ se traducen
 // a su nombre completo de Trello.
-const PERSONAS_FUERA = new Set(["DIANA MARTIN SEPULVEDA", "JOSE CASADO", "PEPE"]);
+const PERSONAS_FUERA = new Set([
+  "DIANA MARTIN SEPULVEDA",
+  "JOSE CASADO",
+  "PEPE",
+  // Tablero WEB (sep 2026): ya no están en el equipo.
+  "PEPE SALES",
+  "PEPOTE",
+  "DANIEL COELHO",
+]);
 
 const ESTADO_POR_LISTA = new Map([
   ["PENDIENTE POR COMENZAR", "pendiente"],
@@ -203,6 +237,9 @@ const ESTADO_POR_LISTA = new Map([
   ["POR ASIGNAR O COMENZAR", "pendiente"],
   ["PENDIENTES APROBACION", "pendiente"],
   ["FINALIZADO", "hecha"],
+  // Tablero WEB
+  ["PENDIENTES POR INICIAR", "pendiente"],
+  ["FINALIZADOS", "hecha"],
 ]);
 
 /** Etiqueta de Trello que se traduce al campo `urgente` (014). */
