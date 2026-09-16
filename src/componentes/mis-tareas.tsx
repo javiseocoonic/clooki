@@ -380,46 +380,65 @@ export function MisTareas({
                 </p>
                 <ul className="flex flex-col">
                   {grupo.map(({ t, proyecto, cliente }) => {
-                    const enRejilla = existentes.has(claveDeTarjeta(t));
+                    const enRejilla = !creadas && existentes.has(claveDeTarjeta(t));
+                    const estiloFila =
+                      "flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-superficie-2 focus-visible:outline-2 focus-visible:outline-acento disabled:cursor-default disabled:hover:bg-transparent";
+                    const contenido = (
+                      <>
+                        <span className="min-w-0 flex-1">
+                          <span
+                            className={`block truncate text-sm font-medium ${enRejilla ? "text-texto-suave" : "text-tinta"}`}
+                          >
+                            {enRejilla && "✓ "}
+                            {t.titulo}
+                          </span>
+                          <span className="block truncate text-xs text-texto-suave">
+                            {proyecto.nombre}
+                            {creadas &&
+                              (t.asignados.length > 0
+                                ? ` · ${t.asignados.join(", ")}`
+                                : "")}
+                          </span>
+                        </span>
+                        {creadas && t.asignados.length === 0 && (
+                          <span className="shrink-0 rounded-full bg-aviso-suave px-2 py-0.5 text-[11px] font-medium text-aviso">
+                            Sin coger
+                          </span>
+                        )}
+                        {t.estado === "en_curso" && (
+                          <span className="shrink-0 rounded-full bg-acento-suave px-2 py-0.5 text-[11px] font-medium text-acento">
+                            En curso
+                          </span>
+                        )}
+                      </>
+                    );
                     return (
                       <li key={t.id} className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          disabled={enRejilla}
-                          onClick={() => anadir(t, proyecto, cliente)}
-                          title={
-                            enRejilla
-                              ? "Ya tiene línea esta semana"
-                              : "Añadir como línea de la semana"
-                          }
-                          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-superficie-2 focus-visible:outline-2 focus-visible:outline-acento disabled:cursor-default disabled:hover:bg-transparent"
-                        >
-                          <span className="min-w-0 flex-1">
-                            <span
-                              className={`block truncate text-sm font-medium ${enRejilla ? "text-texto-suave" : "text-tinta"}`}
-                            >
-                              {enRejilla && "✓ "}
-                              {t.titulo}
-                            </span>
-                            <span className="block truncate text-xs text-texto-suave">
-                              {proyecto.nombre}
-                              {creadas &&
-                                (t.asignados.length > 0
-                                  ? ` · ${t.asignados.join(", ")}`
-                                  : "")}
-                            </span>
-                          </span>
-                          {creadas && t.asignados.length === 0 && (
-                            <span className="shrink-0 rounded-full bg-aviso-suave px-2 py-0.5 text-[11px] font-medium text-aviso">
-                              Sin coger
-                            </span>
-                          )}
-                          {t.estado === "en_curso" && (
-                            <span className="shrink-0 rounded-full bg-acento-suave px-2 py-0.5 text-[11px] font-medium text-acento">
-                              En curso
-                            </span>
-                          )}
-                        </button>
+                        {creadas ? (
+                          // Una tarjeta que llevan otros no es una línea de
+                          // mi semana: se abre su ficha en el tablero.
+                          <Link
+                            href={`/tareas?tarjeta=${t.id}`}
+                            title="Abrir la ficha en el tablero"
+                            className={estiloFila}
+                          >
+                            {contenido}
+                          </Link>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={enRejilla}
+                            onClick={() => anadir(t, proyecto, cliente)}
+                            title={
+                              enRejilla
+                                ? "Ya tiene línea esta semana"
+                                : "Añadir como línea de la semana"
+                            }
+                            className={estiloFila}
+                          >
+                            {contenido}
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => void marcarHecha(t)}

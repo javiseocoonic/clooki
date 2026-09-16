@@ -755,6 +755,7 @@ export function Tablero({
   checksIniciales,
   comentariosIniciales,
   verArchivadas,
+  detalleInicial = null,
 }: {
   personaId: string;
   esAdmin: boolean;
@@ -765,6 +766,8 @@ export function Tablero({
   /** null = hilo no disponible todavía (tabla sin crear); se oculta. */
   comentariosIniciales: TarjetaComentario[] | null;
   verArchivadas: boolean;
+  /** Tarjeta cuyo detalle se abre al cargar (viene de ?tarjeta=id). */
+  detalleInicial?: string | null;
 }) {
   const supabase = useMemo(() => crearClienteNavegador(), []);
   const crono = useCronometros();
@@ -782,7 +785,13 @@ export function Tablero({
   const [clienteMovil, setClienteMovil] = useState<string | null>(null);
   // Detalle tipo Trello: id de la tarjeta cuyo modal está abierto (evita
   // tarjetas kilométricas en el tablero cuando la descripción es larga).
-  const [detalle, setDetalle] = useState<string | null>(null);
+  // Abierta desde fuera (/tareas?tarjeta=id, p. ej. desde «Mis tareas»):
+  // solo si está cargada; una archivada no viene sin «ver archivadas».
+  const [detalle, setDetalle] = useState<string | null>(() =>
+    detalleInicial && tarjetasIniciales.some((t) => t.id === detalleInicial)
+      ? detalleInicial
+      : null,
+  );
   const dialogoRef = useRef<HTMLDivElement>(null);
   // Vista «Mías»: solo tarjetas asignadas a ti (y las columnas quedan en
   // consecuencia). Se compone con dos filtros más: por tipo de proyecto

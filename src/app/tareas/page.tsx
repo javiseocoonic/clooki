@@ -15,8 +15,9 @@ export default async function PaginaTareas({
 }: {
   searchParams: Promise<{ [clave: string]: string | string[] | undefined }>;
 }) {
-  const { archivadas } = await searchParams;
+  const { archivadas, tarjeta } = await searchParams;
   const verArchivadas = archivadas === "1";
+  const detalleInicial = typeof tarjeta === "string" ? tarjeta : null;
 
   const datos = await cargarTareas(verArchivadas);
   if (!datos) redirect("/");
@@ -45,6 +46,7 @@ export default async function PaginaTareas({
             checksIniciales={datos.checks}
             comentariosIniciales={datos.comentarios}
             verArchivadas={verArchivadas}
+            detalleInicial={detalleInicial}
           />
         </main>
       </div>
