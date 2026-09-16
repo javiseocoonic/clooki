@@ -18,9 +18,20 @@ export type Cliente = {
   activo: boolean;
 }
 
+/** Catálogo común de tipos de proyecto (019): Diseño, Audiovisual, RRSS… */
+export type Tipo = {
+  id: string;
+  nombre: string;
+  activo: boolean;
+  creada_en: string;
+}
+
+/** Cliente × tipo. `nombre` es copia del nombre del tipo (las pantallas
+ *  lo leen de aquí); casilla marcada en Gestión = fila con activo. */
 export type Proyecto = {
   id: string;
   cliente_id: string;
+  tipo_id: string;
   nombre: string;
   activo: boolean;
 }
@@ -194,6 +205,13 @@ export type Database = {
         Insert: Omit<Cliente, "id" | "activo"> &
           Partial<Pick<Cliente, "id" | "activo">>;
         Update: Partial<Cliente>;
+        Relationships: [];
+      };
+      tipos: {
+        Row: Tipo;
+        Insert: Omit<Tipo, "id" | "activo" | "creada_en"> &
+          Partial<Pick<Tipo, "id" | "activo" | "creada_en">>;
+        Update: Partial<Tipo>;
         Relationships: [];
       };
       proyectos: {

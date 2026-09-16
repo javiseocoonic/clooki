@@ -12,16 +12,25 @@ function fallo(): never {
   redirect("/gestion?error=1");
 }
 
+// Los tipos de proyecto son un catálogo común (019): un cliente nuevo
+// nace con los tipos marcados en el select múltiple; cada uno es una
+// fila en proyectos con el nombre del tipo copiado.
 export async function crearClienteConProyectos(formulario: FormData) {
   const nombre = String(formulario.get("nombre") ?? "").trim();
   if (!nombre) fallo();
-  // "SEO, Campaña vendimia" → proyectos iniciales opcionales.
-  const proyectos = String(formulario.get("proyectos") ?? "")
-    .split(",")
-    .map((p) => p.trim())
+  const tipoIds = formulario
+    .getAll("tipos")
+    .map((t) => String(t))
     .filter(Boolean);
 
   const supabase = await crearClienteServidor();
+  const { data: tipos, error: errorTipos } = await supabase
+    .from("tipos")
+    .select("id, nombre")
+    .in("id", tipoIds)
+    .eq("activo", true);
+  if (errorTipos) fallo();
+
   const { data: cliente, error } = await supabase
     .from("clientes")
     .insert({ nombre })
@@ -29,25 +38,71 @@ export async function crearClienteConProyectos(formulario: FormData) {
     .single();
   if (error || !cliente) fallo();
 
-  if (proyectos.length > 0) {
-    const { error: errorProyectos } = await supabase
-      .from("proyectos")
-      .insert(proyectos.map((n) => ({ cliente_id: cliente.id, nombre: n })));
+  if (tipos && tipos.length > 0) {
+    const { error: errorProyectos } = await supabase.from("proyectos").insert(
+      tipos.map((t) => ({
+        cliente_id: cliente.id,
+        tipo_id: t.id,
+        nombre: t.nombre,
+      })),
+    );
     if (errorProyectos) fallo();
   }
   revalidatePath("/gestion");
 }
 
-export async function crearProyecto(formulario: FormData) {
-  const clienteId = String(formulario.get("cliente_id") ?? "");
-  const nombre = String(formulario.get("nombre") ?? "").trim();
-  if (!clienteId || !nombre) fallo();
+export async function crearTipo(formulario: FormData) {
+  const nombre = String(formulario.get("nombre") ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!nombre || nombre.length > 60) fallo();
 
   const supabase = await crearClienteServidor();
-  const { error } = await supabase
-    .from("proyectos")
-    .insert({ cliente_id: clienteId, nombre });
+  // El nombre es único en la BD; un duplicado cae en fallo() y la
+  // página avisa.
+  const { error } = await supabase.from("tipos").insert({ nombre });
   if (error) fallo();
+  revalidatePath("/gestion");
+}
+
+// Casilla de tipo en un cliente. Marcar crea la fila de proyectos si no
+// existía (o la reactiva); desmarcar solo la desactiva: nunca se borra,
+// porque horas, cronómetros y tarjetas cuelgan de ella.
+export async function alternarTipoCliente(formulario: FormData) {
+  const clienteId = String(formulario.get("cliente_id") ?? "");
+  const tipoId = String(formulario.get("tipo_id") ?? "");
+  const activar = formulario.get("activar") === "1";
+  if (!clienteId || !tipoId) fallo();
+
+  const supabase = await crearClienteServidor();
+  const { data: existente, error: errorBusqueda } = await supabase
+    .from("proyectos")
+    .select("id, activo")
+    .eq("cliente_id", clienteId)
+    .eq("tipo_id", tipoId)
+    .maybeSingle();
+  if (errorBusqueda) fallo();
+
+  if (existente) {
+    if (existente.activo !== activar) {
+      const { error } = await supabase
+        .from("proyectos")
+        .update({ activo: activar })
+        .eq("id", existente.id);
+      if (error) fallo();
+    }
+  } else if (activar) {
+    const { data: tipo } = await supabase
+      .from("tipos")
+      .select("id, nombre")
+      .eq("id", tipoId)
+      .maybeSingle();
+    if (!tipo) fallo();
+    const { error } = await supabase
+      .from("proyectos")
+      .insert({ cliente_id: clienteId, tipo_id: tipo.id, nombre: tipo.nombre });
+    if (error) fallo();
+  }
   revalidatePath("/gestion");
 }
 
@@ -68,7 +123,7 @@ export async function crearPersona(formulario: FormData) {
   revalidatePath("/gestion");
 }
 
-const TABLAS_ARCHIVABLES = ["clientes", "proyectos", "personas"] as const;
+const TABLAS_ARCHIVABLES = ["clientes", "proyectos", "personas", "tipos"] as const;
 
 export async function alternarActivo(formulario: FormData) {
   const tabla = String(formulario.get("tabla") ?? "");

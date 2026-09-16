@@ -36,19 +36,25 @@ insert into public.clientes (nombre) values
   ('Faeplayas'),
   ('Limasam');
 
--- ---------- Proyectos/tareas ----------
--- Mismos proyectos/tareas comunes para todos los clientes. Se pueden
--- ajustar o ampliar por cliente desde la pantalla de Gestión (admin).
-insert into public.proyectos (cliente_id, nombre)
-select c.id, p.nombre
-from public.clientes c
-cross join (values
+-- ---------- Tipos y proyectos ----------
+-- Los tipos son un catálogo común (019); cada cliente marca en Gestión
+-- cuáles tiene. Aquí todos los clientes nacen con los cinco básicos.
+insert into public.tipos (nombre) values
   ('Desarrollo web'),
   ('RRSS'),
   ('Prensa'),
   ('Consultoría'),
-  ('Contenidos')
-) as p (nombre);
+  ('Contenidos'),
+  ('Gestión interna'),
+  ('Formación'),
+  ('Comercial')
+on conflict (nombre) do nothing;
+
+insert into public.proyectos (cliente_id, tipo_id, nombre)
+select c.id, t.id, t.nombre
+from public.clientes c
+cross join public.tipos t
+where t.nombre in ('Desarrollo web', 'RRSS', 'Prensa', 'Consultoría', 'Contenidos');
 
 -- ---------- Cliente interno (añadido en migración 002; aquí para
 -- instalaciones desde cero) ----------
@@ -56,12 +62,13 @@ insert into public.clientes (nombre)
 select 'Coonic (interno)'
 where not exists (select 1 from public.clientes where nombre = 'Coonic (interno)');
 
-insert into public.proyectos (cliente_id, nombre)
-select c.id, p.nombre
+insert into public.proyectos (cliente_id, tipo_id, nombre)
+select c.id, t.id, t.nombre
 from public.clientes c
-cross join (values ('Gestión interna'), ('Formación'), ('Comercial')) as p (nombre)
+cross join public.tipos t
 where c.nombre = 'Coonic (interno)'
+  and t.nombre in ('Gestión interna', 'Formación', 'Comercial')
   and not exists (
     select 1 from public.proyectos pr
-    where pr.cliente_id = c.id and pr.nombre = p.nombre
+    where pr.cliente_id = c.id and pr.tipo_id = t.id
   );

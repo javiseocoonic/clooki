@@ -4,6 +4,7 @@ import type {
   Persona,
   Proyecto,
   SesionCronometro,
+  Tipo,
   Vacacion,
 } from "@/lib/tipos";
 
@@ -24,6 +25,8 @@ export interface DatosAdmin {
   persona: Persona;
   personas: Persona[];
   clientes: Cliente[];
+  /** Catálogo completo de tipos (activos y archivados), por nombre. */
+  tipos: Tipo[];
   proyectos: Proyecto[];
   sesiones: SesionCronometro[];
 }
@@ -48,10 +51,11 @@ export async function cargarAdmin(): Promise<DatosAdmin | null> {
     .maybeSingle();
   if (!persona || persona.rol !== "admin") return null;
 
-  const [personasRes, clientesRes, proyectosRes, sesionesRes] =
+  const [personasRes, clientesRes, tiposRes, proyectosRes, sesionesRes] =
     await Promise.all([
       supabase.from("personas").select("*").order("nombre"),
       supabase.from("clientes").select("*").order("nombre"),
+      supabase.from("tipos").select("*").order("nombre"),
       supabase.from("proyectos").select("*").order("nombre"),
       supabase
         .from("cronometros")
@@ -64,6 +68,7 @@ export async function cargarAdmin(): Promise<DatosAdmin | null> {
     persona,
     personas: personasRes.data ?? [],
     clientes: clientesRes.data ?? [],
+    tipos: tiposRes.data ?? [],
     proyectos: proyectosRes.data ?? [],
     sesiones: sesionesRes.data ?? [],
   };

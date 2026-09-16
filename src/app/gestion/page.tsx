@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { CLIENTE_INTERNO, cargarAdmin } from "@/lib/datos/admin";
 import { BotonEnvio } from "@/componentes/boton-envio";
 import { Cabecera } from "@/componentes/cabecera";
+import { CasillaTipo } from "@/componentes/casilla-tipo";
 import {
   BandejaCronometros,
   ProveedorCronometros,
@@ -10,9 +11,10 @@ import {
 import {
   alternarActivo,
   alternarRol,
+  alternarTipoCliente,
   crearClienteConProyectos,
   crearPersona,
-  crearProyecto,
+  crearTipo,
   renombrarPersona,
 } from "./acciones";
 
@@ -30,7 +32,7 @@ function BotonArchivar({
   id,
   activo,
 }: {
-  tabla: "clientes" | "proyectos" | "personas";
+  tabla: "clientes" | "proyectos" | "personas" | "tipos";
   id: string;
   activo: boolean;
 }) {
@@ -55,7 +57,8 @@ export default async function PaginaGestion({
   const datos = await cargarAdmin();
   if (!datos) redirect("/");
 
-  const { personas, clientes, proyectos } = datos;
+  const { personas, clientes, tipos, proyectos } = datos;
+  const tiposActivos = tipos.filter((t) => t.activo);
   const clientesConProyectos = clientes
     .filter((c) => c.activo)
     .map((c) => ({
@@ -98,12 +101,12 @@ export default async function PaginaGestion({
             {/* ── Clientes y proyectos ── */}
             <section className="rounded-xl border border-borde bg-superficie p-4">
               <h2 className="mb-3 text-sm font-semibold text-tinta">
-                Clientes y proyectos
+                Clientes y tipos
               </h2>
 
               <form
                 action={crearClienteConProyectos}
-                className="mb-4 flex flex-col gap-2 rounded-lg bg-superficie-2 p-3"
+                className="mb-3 flex flex-col gap-2 rounded-lg bg-superficie-2 p-3"
               >
                 <div className="flex flex-wrap gap-2">
                   <label className="sr-only" htmlFor="nuevo-cliente-nombre">
@@ -123,16 +126,64 @@ export default async function PaginaGestion({
                     Crear cliente
                   </BotonEnvio>
                 </div>
-                <label className="sr-only" htmlFor="nuevo-cliente-proyectos">
-                  Proyectos iniciales
+                <label
+                  className="text-xs text-texto-suave"
+                  htmlFor="nuevo-cliente-tipos"
+                >
+                  Tipos con los que nace (Ctrl o Cmd para elegir varios)
+                </label>
+                <select
+                  id="nuevo-cliente-tipos"
+                  name="tipos"
+                  multiple
+                  size={Math.min(6, Math.max(3, tiposActivos.length))}
+                  className={`${ESTILO_INPUT} h-auto py-1`}
+                >
+                  {tiposActivos.map((t) => (
+                    <option key={t.id} value={t.id} className="px-1 py-0.5">
+                      {t.nombre}
+                    </option>
+                  ))}
+                </select>
+              </form>
+
+              {/* Catálogo de tipos: común a todos los clientes (019). Un
+                  tipo nuevo aparece como casilla en todos los clientes. */}
+              <form
+                action={crearTipo}
+                className="mb-2 flex flex-wrap gap-2 rounded-lg bg-superficie-2 p-3"
+              >
+                <label className="sr-only" htmlFor="nuevo-tipo-nombre">
+                  Nombre del tipo
                 </label>
                 <input
-                  id="nuevo-cliente-proyectos"
-                  name="proyectos"
-                  placeholder="Proyectos iniciales, separados por comas (opcional)"
-                  className={ESTILO_INPUT}
+                  id="nuevo-tipo-nombre"
+                  name="nombre"
+                  required
+                  maxLength={60}
+                  placeholder="Nuevo tipo (Diseño, Audiovisual, RRSS…)"
+                  className={`${ESTILO_INPUT} min-w-40 flex-1`}
                 />
+                <BotonEnvio
+                  className={ESTILO_BOTON_PRIMARIO}
+                  pendienteTexto="Añadiendo…"
+                >
+                  Añadir tipo
+                </BotonEnvio>
               </form>
+              <ul className="mb-4 flex flex-wrap gap-1.5">
+                {tipos.map((t) => (
+                  <li
+                    key={t.id}
+                    className={`flex items-center gap-1 rounded-md border border-borde px-2 py-0.5 text-xs ${
+                      t.activo ? "text-texto" : "text-texto-suave line-through"
+                    }`}
+                  >
+                    {t.nombre}
+                    <BotonArchivar tabla="tipos" id={t.id} activo={t.activo} />
+                  </li>
+                ))}
+              </ul>
 
               <ul>
                 {clientesOrdenados.map((c) => {
@@ -159,51 +210,36 @@ export default async function PaginaGestion({
                             {c.nombre}
                           </span>
                           <span className="text-xs text-texto-suave">
-                            {suyos.filter((p) => p.activo).length} proy.
+                            {suyos.filter((p) => p.activo).length} tipos
                           </span>
                           <BotonArchivar tabla="clientes" id={c.id} activo={c.activo} />
                         </summary>
 
-                        <div className="mb-2 ml-5">
-                          <ul>
-                            {suyos.map((p) => (
-                              <li
-                                key={p.id}
-                                className="flex items-center gap-2 py-1 text-sm"
-                              >
-                                <span
-                                  className={`min-w-0 flex-1 truncate ${
-                                    p.activo ? "text-texto" : "text-texto-suave line-through"
-                                  }`}
-                                >
-                                  {p.nombre}
-                                </span>
-                                <BotonArchivar tabla="proyectos" id={p.id} activo={p.activo} />
+                        {/* Una casilla por tipo del catálogo. Un tipo
+                            archivado solo asoma si el cliente aún lo tiene
+                            marcado, para poder quitárselo. */}
+                        <ul className="mb-2 ml-5 grid gap-x-4 sm:grid-cols-2">
+                          {tipos
+                            .filter(
+                              (t) =>
+                                t.activo ||
+                                suyos.some((p) => p.tipo_id === t.id && p.activo),
+                            )
+                            .map((t) => (
+                              <li key={t.id}>
+                                <CasillaTipo
+                                  clienteId={c.id}
+                                  tipoId={t.id}
+                                  nombre={t.nombre}
+                                  activo={suyos.some(
+                                    (p) => p.tipo_id === t.id && p.activo,
+                                  )}
+                                  archivado={!t.activo}
+                                  accion={alternarTipoCliente}
+                                />
                               </li>
                             ))}
-                          </ul>
-                          {c.activo && (
-                            <form action={crearProyecto} className="mt-1.5 flex gap-2">
-                              <input type="hidden" name="cliente_id" value={c.id} />
-                              <label className="sr-only" htmlFor={`proy-${c.id}`}>
-                                Nuevo proyecto de {c.nombre}
-                              </label>
-                              <input
-                                id={`proy-${c.id}`}
-                                name="nombre"
-                                required
-                                placeholder="Nuevo proyecto o tarea"
-                                className={`${ESTILO_INPUT} h-9 flex-1`}
-                              />
-                              <BotonEnvio
-                                className="h-9 rounded-lg border border-borde-fuerte px-3 text-sm font-medium text-texto transition-colors hover:border-acento hover:text-acento focus-visible:outline-2 focus-visible:outline-acento"
-                                pendienteTexto="Añadiendo…"
-                              >
-                                Añadir
-                              </BotonEnvio>
-                            </form>
-                          )}
-                        </div>
+                        </ul>
                       </details>
                     </li>
                   );

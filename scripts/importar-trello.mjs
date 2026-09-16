@@ -569,6 +569,20 @@ const clientesBd = await ok(
   "clientes",
 );
 const clientePorNorm = new Map(clientesBd.map((c) => [normalizar(c.nombre), c]));
+
+// Tipo del catálogo (019) con el nombre del tablero; se crea si falta.
+const tiposBd = await ok(supabase.from("tipos").select("id, nombre"), "tipos");
+let tipo = tiposBd.find(
+  (t) => normalizar(t.nombre) === normalizar(NOMBRE_PROYECTO),
+);
+if (!tipo) {
+  [tipo] = await ok(
+    supabase.from("tipos").insert({ nombre: NOMBRE_PROYECTO }).select("id, nombre"),
+    `crear tipo ${NOMBRE_PROYECTO}`,
+  );
+  console.log(`+ tipo «${NOMBRE_PROYECTO}»`);
+}
+
 const proyectoPorCliente = new Map();
 for (const nombre of new Set(plan.map((f) => f.cliente))) {
   let cliente = clientePorNorm.get(normalizar(nombre));
@@ -593,7 +607,7 @@ for (const nombre of new Set(plan.map((f) => f.cliente))) {
     [proyecto] = await ok(
       supabase
         .from("proyectos")
-        .insert({ cliente_id: cliente.id, nombre: NOMBRE_PROYECTO })
+        .insert({ cliente_id: cliente.id, tipo_id: tipo.id, nombre: tipo.nombre })
         .select("id, nombre"),
       `crear proyecto de ${nombre}`,
     );
