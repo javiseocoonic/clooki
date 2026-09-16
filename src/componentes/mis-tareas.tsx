@@ -301,14 +301,14 @@ export function MisTareas({
             {miasVisibles.length > 0 && (
               <section
                 aria-labelledby={`${idBase}-mias`}
-                className="rounded-lg bg-acento-suave/40 p-1.5"
+                className="rounded-lg border border-borde p-1.5"
               >
                 <button
                   type="button"
                   id={`${idBase}-mias`}
                   aria-expanded={verMias}
                   onClick={() => setVerMias((v) => !v)}
-                  className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-semibold text-tinta transition-colors hover:bg-acento-suave focus-visible:outline-2 focus-visible:outline-acento"
+                  className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-semibold text-tinta transition-colors hover:bg-superficie-2 focus-visible:outline-2 focus-visible:outline-acento"
                 >
                   <span
                     aria-hidden="true"
@@ -325,14 +325,14 @@ export function MisTareas({
             {creadasVisibles.length > 0 && (
               <section
                 aria-labelledby={`${idBase}-creadas`}
-                className="rounded-lg bg-aviso-suave/60 p-1.5"
+                className="rounded-lg border border-borde p-1.5"
               >
                 <button
                   type="button"
                   id={`${idBase}-creadas`}
                   aria-expanded={verCreadas}
                   onClick={() => setVerCreadas((v) => !v)}
-                  className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-semibold text-tinta transition-colors hover:bg-aviso-suave focus-visible:outline-2 focus-visible:outline-acento"
+                  className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-semibold text-tinta transition-colors hover:bg-superficie-2 focus-visible:outline-2 focus-visible:outline-acento"
                 >
                   <span
                     aria-hidden="true"
@@ -370,8 +370,10 @@ export function MisTareas({
             {grupos.map((grupo) => (
               <li key={grupo[0].cliente.id} className="mt-1">
                 <p
-                  className={`rounded-md px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-texto ${
-                    creadas ? "bg-aviso-suave" : "bg-acento-suave"
+                  className={`rounded-md border-l-4 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide ${
+                    creadas
+                      ? "border-aviso bg-aviso-suave text-aviso"
+                      : "border-acento bg-acento-suave text-acento"
                   }`}
                 >
                   {grupo[0].cliente.nombre}
