@@ -391,17 +391,17 @@ for (const tarjeta of abiertas) {
 
   // Etiquetas: «Urgente» al campo; el resto, a la descripción.
   const etiquetas = (tarjeta.labels ?? []).map((l) => l.name).filter(Boolean);
-  const urgente = etiquetas.some((e) => ETIQUETA_URGENTE.test(normalizar(e)));
-  const otrasEtiquetas = etiquetas.filter(
-    (e) => !ETIQUETA_URGENTE.test(normalizar(e)),
-  );
+  const etiqueta = etiquetaDeTrello(etiquetas);
+  const urgente = etiqueta === "urgente";
 
   // Descripción: la de Trello (menciones traducidas más abajo, cuando
   // se conozcan las personas de Clooki) + prioridad + enlace original.
   const partes = [];
   if (tarjeta.desc?.trim()) partes.push(tarjeta.desc.trim());
-  if (otrasEtiquetas.length) partes.push(`Prioridad: ${otrasEtiquetas.join(", ")}`);
   partes.push(`— Importada de Trello (lista «${lista}») · ${tarjeta.shortUrl}`);
+  // La etiqueta vive como marca al final de la descripción (ver
+  // src/lib/etiquetas.ts); la app la lee y la oculta.
+  if (etiqueta !== "ninguna") partes.push(`[etiqueta:${etiqueta}]`);
 
   // Subtareas: todos los checklists, en orden, aplanados.
   const checks = [];
@@ -425,7 +425,7 @@ for (const tarjeta of abiertas) {
     descripcion: partes.join("\n\n"),
     fechaLimite: fecha(tarjeta.due),
     urgente,
-    etiqueta: etiquetaDeTrello(etiquetas),
+    etiqueta,
     checks,
     pos: tarjeta.pos,
     hechaEn: estado === "hecha" ? tarjeta.dateLastActivity : null,
@@ -510,12 +510,6 @@ if (!url || !claveSecreta) {
   process.exit(0);
 }
 const supabase = createClient(url, claveSecreta);
-
-// Sonda: ¿existe ya la columna etiqueta (020)? Si no, solo se escribe
-// `urgente` y la prioridad queda en la línea «Prioridad: …».
-const ETIQUETAS_DISPONIBLES = !(
-  await supabase.from("tarjetas").select("etiqueta").limit(1)
-).error;
 
 async function ok(consulta, contexto) {
   const res = await consulta;
@@ -742,7 +736,6 @@ for (const f of aPisar) {
         estado: f.estado,
         fecha_limite: f.fechaLimite,
         urgente: f.urgente,
-        ...(ETIQUETAS_DISPONIBLES ? { etiqueta: f.etiqueta } : {}),
       })
       .eq("id", t.id),
     `pisar tarjeta ${f.shortLink}`,
@@ -782,7 +775,6 @@ for (const f of aCrear.sort((a, b) => a.pos - b.pos)) {
         posicion: pos,
         fecha_limite: f.fechaLimite,
         urgente: f.urgente,
-        ...(ETIQUETAS_DISPONIBLES ? { etiqueta: f.etiqueta } : {}),
       })
       .select("id"),
     `crear tarjeta ${f.shortLink}`,

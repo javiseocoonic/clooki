@@ -1,18 +1,17 @@
 -- ============================================================
--- Migración 020: etiqueta de prioridad en las tarjetas
+-- Migración 020: etiqueta de prioridad en las tarjetas (columna propia)
 -- Ejecutar en: Supabase Dashboard → SQL Editor (después de 019)
 --
--- Petición Javi (16 sep 2026): la marca «urgente» sí/no se queda corta.
+-- OPCIONAL de momento. Desde el 16 sep 2026 la etiqueta funciona SIN
+-- esta migración: la app la guarda como marca al final de la
+-- descripción («[etiqueta:mediana]») y la oculta al mostrarla (ver
+-- src/lib/etiquetas.ts). Esta migración la pasa a una columna de
+-- verdad y limpia las marcas. Cuando se ejecute, hay que cambiar la
+-- app para leer/escribir la columna en vez de la marca.
+--
 -- Etiquetas, en el orden en que se apilan dentro de cada columna:
 --   urgente · mediana · (sin etiqueta) · no_urgente ·
 --   pendiente_aprobacion · pausado
--- Son las mismas cinco que usaba el equipo en Trello (Urgente, Mediana
--- importancia, No es emergencia, Pendiente aprobación, Pausado hasta
--- aviso), así que las importadas se rellenan desde la línea
--- «Prioridad: …» que el importador dejó en la descripción.
---
--- `urgente` se conserva (lo leen pantallas y filtros antiguos) pero deja
--- de ser editable a mano: un trigger lo deriva de la etiqueta.
 -- ============================================================
 
 begin;
@@ -25,23 +24,24 @@ alter table public.tarjetas
     'pendiente_aprobacion', 'pausado'
   ));
 
--- ---------- Relleno desde lo que ya hay ----------
--- Prioridad si una tarjeta tenía varias marcas en Trello: urgente >
--- pausado > pendiente de aprobación > mediana > no urgente.
-update public.tarjetas set etiqueta = case
-  when urgente then 'urgente'
-  when descripcion ilike '%Prioridad:%PAUSADO HASTA AVISO%' then 'pausado'
-  when descripcion ilike '%Prioridad:%PENDIENTE APROBACI%' then 'pendiente_aprobacion'
-  when descripcion ilike '%Prioridad:%MEDIANA IMPORTANCIA%' then 'mediana'
-  when descripcion ilike '%Prioridad:%NO URGENTE%'
-    or descripcion ilike '%Prioridad:%NO ES EMERGENCIA%' then 'no_urgente'
-  else 'ninguna'
-end;
+-- ---------- Relleno desde la marca de la descripción ----------
+update public.tarjetas
+set etiqueta = substring(descripcion from '\[etiqueta:([a-z_]+)\]\s*$')
+where descripcion ~ '\[etiqueta:(urgente|mediana|no_urgente|pendiente_aprobacion|pausado)\]\s*$';
 
--- ---------- urgente y etiqueta, siempre de acuerdo ----------
--- Manda la etiqueta. Si una escritura solo toca `urgente` (una pestaña
--- con la versión anterior de la app, el importador viejo…), se deriva
--- la etiqueta de ahí para no dejar los dos campos en contradicción.
+-- Sin marca pero con el booleano antiguo: urgente.
+update public.tarjetas set etiqueta = 'urgente'
+where etiqueta = 'ninguna' and urgente;
+
+-- ---------- Quitar la marca del texto ----------
+update public.tarjetas
+set descripcion = nullif(
+  rtrim(regexp_replace(descripcion, '\s*\[etiqueta:[a-z_]+\]\s*$', '')),
+  ''
+)
+where descripcion ~ '\[etiqueta:[a-z_]+\]\s*$';
+
+-- ---------- urgente = (etiqueta = 'urgente'), siempre ----------
 create or replace function public.tocar_urgente_desde_etiqueta()
 returns trigger
 language plpgsql

@@ -13,6 +13,8 @@ import { limpiarTarea } from "@/lib/semana";
 import {
   ETIQUETAS,
   ETIQUETA_POR_CLAVE,
+  descripcionConMarca,
+  descripcionSinMarca,
   etiquetaDe,
   pesoEtiqueta,
   type Etiqueta,
@@ -186,7 +188,6 @@ function FormularioTarjeta({
   equipo,
   personaId,
   puedeAsignarOtros,
-  etiquetasDisponibles,
   inicial,
   etiquetaGuardar,
   alGuardar,
@@ -199,7 +200,6 @@ function FormularioTarjeta({
   equipo: MiembroEquipo[];
   personaId: string;
   puedeAsignarOtros: boolean;
-  etiquetasDisponibles: boolean;
   inicial?: DatosFormularioTarjeta;
   etiquetaGuardar: string;
   alGuardar: (d: DatosFormularioTarjeta) => Promise<boolean>;
@@ -342,27 +342,11 @@ function FormularioTarjeta({
             Quitar
           </button>
         )}
-        {!etiquetasDisponibles && (
-          <button
-            type="button"
-            aria-pressed={etiqueta === "urgente"}
-            onClick={() =>
-              setEtiqueta((e) => (e === "urgente" ? "ninguna" : "urgente"))
-            }
-            className={`ml-auto h-9 rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-acento ${
-              etiqueta === "urgente"
-                ? "border-error/40 bg-error-suave text-error"
-                : "border-borde text-texto-suave hover:border-borde-fuerte hover:text-tinta"
-            }`}
-          >
-            ⚑ Urgente
-          </button>
-        )}
       </div>
 
-      {/* Etiqueta de prioridad (020): una sola por tarjeta; el orden de
-          los chips es el orden de apilado en la columna. */}
-      {etiquetasDisponibles && (
+      {/* Etiqueta de prioridad: una sola por tarjeta; el orden de los
+          chips es el orden de apilado en la columna. */}
+      {(
         <fieldset className="flex flex-col gap-1.5">
           <legend className="mb-1 text-[11px] font-medium uppercase tracking-wide text-texto-suave">
             Etiqueta
@@ -808,7 +792,6 @@ export function Tablero({
   tarjetasIniciales,
   checksIniciales,
   comentariosIniciales,
-  etiquetasDisponibles,
   verArchivadas,
   detalleInicial = null,
 }: {
@@ -820,8 +803,6 @@ export function Tablero({
   checksIniciales: TarjetaCheck[];
   /** null = hilo no disponible todavía (tabla sin crear); se oculta. */
   comentariosIniciales: TarjetaComentario[] | null;
-  /** false = columna `etiqueta` sin crear (020): solo el botón Urgente. */
-  etiquetasDisponibles: boolean;
   verArchivadas: boolean;
   /** Tarjeta cuyo detalle se abre al cargar (viene de ?tarjeta=id). */
   detalleInicial?: string | null;
@@ -831,15 +812,6 @@ export function Tablero({
   const [tarjetas, setTarjetas] = useState(tarjetasIniciales);
   const [checks, setChecks] = useState(checksIniciales);
   const hiloDisponible = comentariosIniciales !== null;
-
-  /** Campos de prioridad a escribir: `etiqueta` solo si la columna existe;
-   *  `urgente` siempre (lo derivan también el trigger y las vistas viejas). */
-  function camposEtiqueta(etiqueta: Etiqueta) {
-    return {
-      urgente: etiqueta === "urgente",
-      ...(etiquetasDisponibles ? { etiqueta } : {}),
-    };
-  }
   const [comentarios, setComentarios] = useState(comentariosIniciales ?? []);
   const [anuncio, setAnuncio] = useState("");
   const [creandoEn, setCreandoEn] = useState<string | null>(null);
@@ -1116,11 +1088,11 @@ export function Tablero({
       .insert({
         proyecto_id: d.proyectoId,
         titulo: d.titulo,
-        descripcion: d.descripcion || null,
+        descripcion: descripcionConMarca(d.descripcion, d.etiqueta),
         creada_por: personaId,
         posicion,
         fecha_limite: d.fechaLimite || null,
-        ...camposEtiqueta(d.etiqueta),
+        urgente: d.etiqueta === "urgente",
       })
       .select()
       .single();
@@ -1176,9 +1148,9 @@ export function Tablero({
       .update({
         titulo: d.titulo,
         proyecto_id: d.proyectoId,
-        descripcion: d.descripcion || null,
+        descripcion: descripcionConMarca(d.descripcion, d.etiqueta),
         fecha_limite: d.fechaLimite || null,
-        ...camposEtiqueta(d.etiqueta),
+        urgente: d.etiqueta === "urgente",
       })
       .eq("id", t.id);
     if (error) {
@@ -1291,10 +1263,9 @@ export function Tablero({
               ...x,
               titulo: d.titulo,
               proyecto_id: d.proyectoId,
-              descripcion: d.descripcion || null,
+              descripcion: descripcionConMarca(d.descripcion, d.etiqueta),
               fecha_limite: d.fechaLimite || null,
               urgente: d.etiqueta === "urgente",
-              etiqueta: d.etiqueta,
               asignados: asignadosFinal,
             }
           : x,
@@ -1642,11 +1613,10 @@ export function Tablero({
             equipo={equipo}
             personaId={personaId}
             puedeAsignarOtros={esAdmin || t.creada_por === personaId}
-            etiquetasDisponibles={etiquetasDisponibles}
             inicial={{
               titulo: t.titulo,
               proyectoId: t.proyecto_id,
-              descripcion: t.descripcion ?? "",
+              descripcion: descripcionSinMarca(t.descripcion),
               asignados: t.asignados,
               fechaLimite: t.fecha_limite ?? "",
               etiqueta: etiquetaDe(t),
@@ -1792,9 +1762,9 @@ export function Tablero({
             </div>
           )}
 
-          {t.descripcion && (
+          {descripcionSinMarca(t.descripcion) && (
             <p className="line-clamp-3 text-xs leading-relaxed whitespace-pre-wrap text-texto-suave">
-              {t.descripcion}
+              {descripcionSinMarca(t.descripcion)}
             </p>
           )}
         </div>
@@ -2119,9 +2089,9 @@ export function Tablero({
             </div>
           )}
 
-          {t.descripcion && (
+          {descripcionSinMarca(t.descripcion) && (
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-texto">
-              {t.descripcion}
+              {descripcionSinMarca(t.descripcion)}
             </p>
           )}
 
@@ -2281,7 +2251,6 @@ export function Tablero({
             equipo={equipo}
             personaId={personaId}
             puedeAsignarOtros={true}
-            etiquetasDisponibles={etiquetasDisponibles}
             etiquetaGuardar="Crear tarjeta"
             alGuardar={(d) => crearTarjeta(c.id, d)}
             alCancelar={() => setCreandoEn(null)}
@@ -2456,7 +2425,6 @@ export function Tablero({
             clientes={clientes}
             equipo={equipo}
             personaId={personaId}
-            etiquetasDisponibles={etiquetasDisponibles}
             alCrear={crearTarjeta}
           />
         </span>
@@ -2590,13 +2558,11 @@ function BotonNuevaTarjeta({
   clientes,
   equipo,
   personaId,
-  etiquetasDisponibles,
   alCrear,
 }: {
   clientes: ClienteConProyectos[];
   equipo: MiembroEquipo[];
   personaId: string;
-  etiquetasDisponibles: boolean;
   alCrear: (clienteId: string, d: DatosFormularioTarjeta) => Promise<boolean>;
 }) {
   const [abierto, setAbierto] = useState(false);
@@ -2638,7 +2604,6 @@ function BotonNuevaTarjeta({
               equipo={equipo}
               personaId={personaId}
               puedeAsignarOtros={true}
-              etiquetasDisponibles={etiquetasDisponibles}
               etiquetaGuardar={`Crear en ${cliente.nombre}`}
               alGuardar={async (d) => {
                 const creada = await alCrear(cliente.id, d);

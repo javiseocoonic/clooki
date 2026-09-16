@@ -1,7 +1,14 @@
-// Etiquetas de prioridad de las tarjetas (migración 020). Las mismas
-// cinco que usaba el equipo en Trello, más «sin etiqueta». El orden del
-// array es el orden de apilado dentro de cada columna del tablero:
-// urgentes arriba, pausadas abajo (decisión Javi, 16 sep 2026).
+// Etiquetas de prioridad de las tarjetas. Las mismas cinco que usaba el
+// equipo en Trello, más «sin etiqueta». El orden del array es el orden
+// de apilado dentro de cada columna del tablero: urgentes arriba,
+// pausadas abajo (decisión Javi, 16 sep 2026).
+//
+// DÓNDE VIVE: sin columna propia (no hay migración ejecutable de
+// momento), la etiqueta se guarda como una marca al final de la
+// descripción, «[etiqueta:mediana]», que la app lee y oculta. `urgente`
+// (booleano real de la tabla) se mantiene sincronizado para los filtros
+// y contadores que lo leen. La migración 020 traslada la marca a una
+// columna cuando se ejecute.
 
 export type Etiqueta =
   | "urgente"
@@ -50,11 +57,32 @@ export function pesoEtiqueta(e: Etiqueta | null | undefined): number {
   return i === -1 ? ETIQUETAS.findIndex((x) => x.clave === "ninguna") : i;
 }
 
-/** Etiqueta efectiva de una tarjeta: si la columna aún no existe en la
- *  BD (020 sin ejecutar), se deriva del booleano `urgente`. */
+/** Marca al final de la descripción: última línea «[etiqueta:clave]». */
+const MARCA =
+  /\s*\[etiqueta:(urgente|mediana|no_urgente|pendiente_aprobacion|pausado)\]\s*$/;
+
+/** Etiqueta efectiva de una tarjeta: la marca de la descripción; si no
+ *  hay, el booleano `urgente`. */
 export function etiquetaDe(t: {
-  etiqueta?: Etiqueta | null;
+  descripcion: string | null;
   urgente: boolean;
 }): Etiqueta {
-  return t.etiqueta ?? (t.urgente ? "urgente" : "ninguna");
+  const m = t.descripcion?.match(MARCA);
+  if (m) return m[1] as Etiqueta;
+  return t.urgente ? "urgente" : "ninguna";
+}
+
+/** Descripción tal como se enseña: sin la marca. */
+export function descripcionSinMarca(descripcion: string | null): string {
+  return (descripcion ?? "").replace(MARCA, "").trimEnd();
+}
+
+/** Descripción a guardar: texto limpio + marca (si hay etiqueta). */
+export function descripcionConMarca(
+  descripcion: string,
+  etiqueta: Etiqueta,
+): string | null {
+  const limpia = descripcionSinMarca(descripcion).trim();
+  if (etiqueta === "ninguna") return limpia || null;
+  return `${limpia}${limpia ? "\n\n" : ""}[etiqueta:${etiqueta}]`;
 }
