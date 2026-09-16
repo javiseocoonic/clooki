@@ -10,6 +10,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { crearClienteNavegador } from "@/lib/supabase/navegador";
 import { limpiarTarea } from "@/lib/semana";
+import {
+  ETIQUETAS,
+  ETIQUETA_POR_CLAVE,
+  etiquetaDe,
+  pesoEtiqueta,
+  type Etiqueta,
+} from "@/lib/etiquetas";
 import { BuscadorCliente } from "./buscador-cliente";
 import {
   duracionMs,
@@ -166,7 +173,8 @@ export interface DatosFormularioTarjeta {
   asignados: string[];
   /** `YYYY-MM-DD` de entrega; "" = sin fecha. */
   fechaLimite: string;
-  urgente: boolean;
+  /** Prioridad (020). Con la columna sin crear solo se ofrece «urgente». */
+  etiqueta: Etiqueta;
   /** Subtareas: id null = nueva. En el formulario solo se edita el
    *  texto; persona y fecha por ítem viven en el modal de detalle. */
   checks: { id: string | null; texto: string }[];
@@ -178,6 +186,7 @@ function FormularioTarjeta({
   equipo,
   personaId,
   puedeAsignarOtros,
+  etiquetasDisponibles,
   inicial,
   etiquetaGuardar,
   alGuardar,
@@ -190,6 +199,7 @@ function FormularioTarjeta({
   equipo: MiembroEquipo[];
   personaId: string;
   puedeAsignarOtros: boolean;
+  etiquetasDisponibles: boolean;
   inicial?: DatosFormularioTarjeta;
   etiquetaGuardar: string;
   alGuardar: (d: DatosFormularioTarjeta) => Promise<boolean>;
@@ -204,7 +214,9 @@ function FormularioTarjeta({
     () => new Set(inicial?.asignados ?? []),
   );
   const [fechaLimite, setFechaLimite] = useState(inicial?.fechaLimite ?? "");
-  const [urgente, setUrgente] = useState(inicial?.urgente ?? false);
+  const [etiqueta, setEtiqueta] = useState<Etiqueta>(
+    inicial?.etiqueta ?? "ninguna",
+  );
   const [checksForm, setChecksForm] = useState<
     { id: string | null; texto: string }[]
   >(() => inicial?.checks ?? []);
@@ -237,7 +249,7 @@ function FormularioTarjeta({
       descripcion: descripcion.trim(),
       asignados: [...asignados],
       fechaLimite,
-      urgente,
+      etiqueta,
       checks: checksForm
         .map((c) => ({ id: c.id, texto: c.texto.trim().slice(0, 200).trim() }))
         .filter((c) => c.texto.length > 0),
@@ -330,19 +342,61 @@ function FormularioTarjeta({
             Quitar
           </button>
         )}
-        <button
-          type="button"
-          aria-pressed={urgente}
-          onClick={() => setUrgente((u) => !u)}
-          className={`ml-auto h-9 rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-acento ${
-            urgente
-              ? "border-error/40 bg-error-suave text-error"
-              : "border-borde text-texto-suave hover:border-borde-fuerte hover:text-tinta"
-          }`}
-        >
-          ⚑ Urgente
-        </button>
+        {!etiquetasDisponibles && (
+          <button
+            type="button"
+            aria-pressed={etiqueta === "urgente"}
+            onClick={() =>
+              setEtiqueta((e) => (e === "urgente" ? "ninguna" : "urgente"))
+            }
+            className={`ml-auto h-9 rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-acento ${
+              etiqueta === "urgente"
+                ? "border-error/40 bg-error-suave text-error"
+                : "border-borde text-texto-suave hover:border-borde-fuerte hover:text-tinta"
+            }`}
+          >
+            ⚑ Urgente
+          </button>
+        )}
       </div>
+
+      {/* Etiqueta de prioridad (020): una sola por tarjeta; el orden de
+          los chips es el orden de apilado en la columna. */}
+      {etiquetasDisponibles && (
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="mb-1 text-[11px] font-medium uppercase tracking-wide text-texto-suave">
+            Etiqueta
+          </legend>
+          <div className="flex flex-wrap gap-1.5">
+            {ETIQUETAS.map((e) => {
+              const puesta = etiqueta === e.clave;
+              return (
+                <button
+                  key={e.clave}
+                  type="button"
+                  aria-pressed={puesta}
+                  onClick={() =>
+                    setEtiqueta(puesta && e.clave !== "ninguna" ? "ninguna" : e.clave)
+                  }
+                  className={`h-8 rounded-full border-2 px-3 text-xs font-semibold transition-all focus-visible:outline-2 focus-visible:outline-acento ${
+                    e.clave === "ninguna"
+                      ? puesta
+                        ? "border-tinta bg-superficie-2 text-tinta"
+                        : "border-borde text-texto-suave hover:border-borde-fuerte hover:text-tinta"
+                      : `${e.chip} ${
+                          puesta
+                            ? "border-tinta ring-2 ring-tinta/20"
+                            : "border-transparent opacity-60 hover:opacity-100"
+                        }`
+                  }`}
+                >
+                  {e.texto}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+      )}
 
       <fieldset>
         <legend className="pb-1 text-[11px] font-medium uppercase tracking-wide text-texto-suave">
@@ -754,6 +808,7 @@ export function Tablero({
   tarjetasIniciales,
   checksIniciales,
   comentariosIniciales,
+  etiquetasDisponibles,
   verArchivadas,
   detalleInicial = null,
 }: {
@@ -765,6 +820,8 @@ export function Tablero({
   checksIniciales: TarjetaCheck[];
   /** null = hilo no disponible todavía (tabla sin crear); se oculta. */
   comentariosIniciales: TarjetaComentario[] | null;
+  /** false = columna `etiqueta` sin crear (020): solo el botón Urgente. */
+  etiquetasDisponibles: boolean;
   verArchivadas: boolean;
   /** Tarjeta cuyo detalle se abre al cargar (viene de ?tarjeta=id). */
   detalleInicial?: string | null;
@@ -774,6 +831,15 @@ export function Tablero({
   const [tarjetas, setTarjetas] = useState(tarjetasIniciales);
   const [checks, setChecks] = useState(checksIniciales);
   const hiloDisponible = comentariosIniciales !== null;
+
+  /** Campos de prioridad a escribir: `etiqueta` solo si la columna existe;
+   *  `urgente` siempre (lo derivan también el trigger y las vistas viejas). */
+  function camposEtiqueta(etiqueta: Etiqueta) {
+    return {
+      urgente: etiqueta === "urgente",
+      ...(etiquetasDisponibles ? { etiqueta } : {}),
+    };
+  }
   const [comentarios, setComentarios] = useState(comentariosIniciales ?? []);
   const [anuncio, setAnuncio] = useState("");
   const [creandoEn, setCreandoEn] = useState<string | null>(null);
@@ -1010,12 +1076,16 @@ export function Tablero({
     );
   }
 
+  // Dentro de la columna manda la etiqueta (urgentes arriba, pausadas
+  // abajo); a igual etiqueta, el orden manual (posición).
   function visiblesOrdenadas(clienteId: string) {
     return tarjetasDe(clienteId)
       .filter((t) => t.estado !== "hecha")
       .sort(
         (a, b) =>
-          a.posicion - b.posicion || a.creada_en.localeCompare(b.creada_en),
+          pesoEtiqueta(etiquetaDe(a)) - pesoEtiqueta(etiquetaDe(b)) ||
+          a.posicion - b.posicion ||
+          a.creada_en.localeCompare(b.creada_en),
       );
   }
 
@@ -1050,7 +1120,7 @@ export function Tablero({
         creada_por: personaId,
         posicion,
         fecha_limite: d.fechaLimite || null,
-        urgente: d.urgente,
+        ...camposEtiqueta(d.etiqueta),
       })
       .select()
       .single();
@@ -1108,7 +1178,7 @@ export function Tablero({
         proyecto_id: d.proyectoId,
         descripcion: d.descripcion || null,
         fecha_limite: d.fechaLimite || null,
-        urgente: d.urgente,
+        ...camposEtiqueta(d.etiqueta),
       })
       .eq("id", t.id);
     if (error) {
@@ -1223,7 +1293,8 @@ export function Tablero({
               proyecto_id: d.proyectoId,
               descripcion: d.descripcion || null,
               fecha_limite: d.fechaLimite || null,
-              urgente: d.urgente,
+              urgente: d.etiqueta === "urgente",
+              etiqueta: d.etiqueta,
               asignados: asignadosFinal,
             }
           : x,
@@ -1571,13 +1642,14 @@ export function Tablero({
             equipo={equipo}
             personaId={personaId}
             puedeAsignarOtros={esAdmin || t.creada_por === personaId}
+            etiquetasDisponibles={etiquetasDisponibles}
             inicial={{
               titulo: t.titulo,
               proyectoId: t.proyecto_id,
               descripcion: t.descripcion ?? "",
               asignados: t.asignados,
               fechaLimite: t.fecha_limite ?? "",
-              urgente: t.urgente,
+              etiqueta: etiquetaDe(t),
               checks: checksDe(t.id).map((c) => ({ id: c.id, texto: c.texto })),
             }}
             etiquetaGuardar="Guardar"
@@ -1670,11 +1742,17 @@ export function Tablero({
             {chipsAsignados(t)}
           </div>
 
-          {(t.urgente || t.fecha_limite || checksDe(t.id).length > 0) && (
+          {(etiquetaDe(t) !== "ninguna" ||
+            t.fecha_limite ||
+            checksDe(t.id).length > 0) && (
             <div className="flex flex-wrap items-center gap-1.5">
-              {t.urgente && (
-                <span className="rounded-full bg-error-suave px-2 py-0.5 text-[11px] font-semibold text-error">
-                  ⚑ Urgente
+              {etiquetaDe(t) !== "ninguna" && (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                    ETIQUETA_POR_CLAVE.get(etiquetaDe(t))?.chip ?? ""
+                  }`}
+                >
+                  {ETIQUETA_POR_CLAVE.get(etiquetaDe(t))?.texto}
                 </span>
               )}
               {t.fecha_limite && (
@@ -2012,11 +2090,15 @@ export function Tablero({
             {etiquetaFechaCorta(t.creada_en.slice(0, 10))}
           </p>
 
-          {(t.urgente || t.fecha_limite) && (
+          {(etiquetaDe(t) !== "ninguna" || t.fecha_limite) && (
             <div className="flex flex-wrap items-center gap-1.5">
-              {t.urgente && (
-                <span className="rounded-full bg-error-suave px-2 py-0.5 text-[11px] font-semibold text-error">
-                  ⚑ Urgente
+              {etiquetaDe(t) !== "ninguna" && (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                    ETIQUETA_POR_CLAVE.get(etiquetaDe(t))?.chip ?? ""
+                  }`}
+                >
+                  {ETIQUETA_POR_CLAVE.get(etiquetaDe(t))?.texto}
                 </span>
               )}
               {t.fecha_limite && (
@@ -2199,6 +2281,7 @@ export function Tablero({
             equipo={equipo}
             personaId={personaId}
             puedeAsignarOtros={true}
+            etiquetasDisponibles={etiquetasDisponibles}
             etiquetaGuardar="Crear tarjeta"
             alGuardar={(d) => crearTarjeta(c.id, d)}
             alCancelar={() => setCreandoEn(null)}
@@ -2373,6 +2456,7 @@ export function Tablero({
             clientes={clientes}
             equipo={equipo}
             personaId={personaId}
+            etiquetasDisponibles={etiquetasDisponibles}
             alCrear={crearTarjeta}
           />
         </span>
@@ -2506,11 +2590,13 @@ function BotonNuevaTarjeta({
   clientes,
   equipo,
   personaId,
+  etiquetasDisponibles,
   alCrear,
 }: {
   clientes: ClienteConProyectos[];
   equipo: MiembroEquipo[];
   personaId: string;
+  etiquetasDisponibles: boolean;
   alCrear: (clienteId: string, d: DatosFormularioTarjeta) => Promise<boolean>;
 }) {
   const [abierto, setAbierto] = useState(false);
@@ -2552,6 +2638,7 @@ function BotonNuevaTarjeta({
               equipo={equipo}
               personaId={personaId}
               puedeAsignarOtros={true}
+              etiquetasDisponibles={etiquetasDisponibles}
               etiquetaGuardar={`Crear en ${cliente.nombre}`}
               alGuardar={async (d) => {
                 const creada = await alCrear(cliente.id, d);

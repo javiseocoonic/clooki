@@ -45,6 +45,7 @@ export default async function PaginaTareas({
             tarjetasIniciales={datos.tarjetas}
             checksIniciales={datos.checks}
             comentariosIniciales={datos.comentarios}
+            etiquetasDisponibles={datos.etiquetasDisponibles}
             verArchivadas={verArchivadas}
             detalleInicial={detalleInicial}
           />

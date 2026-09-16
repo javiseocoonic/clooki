@@ -2,6 +2,8 @@
 // Mantener sincronizados con la BD; cuando haya CLI de Supabase configurado
 // se pueden regenerar con `supabase gen types`.
 
+import type { Etiqueta } from "@/lib/etiquetas";
+
 export type Rol = "admin" | "miembro";
 
 export type Persona = {
@@ -75,8 +77,12 @@ export type Tarjeta = {
   hecha_en: string | null;
   /** `YYYY-MM-DD` de entrega; colorea la tarjeta según proximidad. */
   fecha_limite: string | null;
-  /** Marca manual, independiente del plazo (urgente ≠ vence pronto). */
+  /** Derivado de `etiqueta` por trigger (020); se mantiene por las
+   *  pantallas y filtros que lo leen. */
   urgente: boolean;
+  /** Prioridad (020). Ausente si la columna aún no existe en la BD:
+   *  entonces se deriva de `urgente` (ver lib/etiquetas). */
+  etiqueta?: Etiqueta;
   creada_en: string;
   actualizado_en: string;
 }
@@ -240,7 +246,9 @@ export type Database = {
         // Insert/Update a propósito.
         Row: Tarjeta;
         Insert: Pick<Tarjeta, "proyecto_id" | "titulo" | "creada_por" | "posicion"> &
-          Partial<Pick<Tarjeta, "id" | "descripcion" | "estado" | "fecha_limite" | "urgente">>;
+          Partial<
+            Pick<Tarjeta, "id" | "descripcion" | "estado" | "fecha_limite" | "urgente" | "etiqueta">
+          >;
         Update: Partial<
           Pick<
             Tarjeta,
@@ -251,6 +259,7 @@ export type Database = {
             | "posicion"
             | "fecha_limite"
             | "urgente"
+            | "etiqueta"
           >
         >;
         Relationships: [];

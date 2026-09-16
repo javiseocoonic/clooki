@@ -256,6 +256,25 @@ const ESTADO_POR_LISTA = new Map([
 /** Etiqueta de Trello que se traduce al campo `urgente` (014). */
 const ETIQUETA_URGENTE = /^URGENTE$/;
 
+/**
+ * Etiqueta de prioridad (020) a partir de las etiquetas de Trello, por
+ * orden de prioridad si hay varias. Devuelve la clave de Clooki.
+ */
+const ETIQUETAS_TRELLO = [
+  [/^URGENTE$/, "urgente"],
+  [/PAUSADO/, "pausado"],
+  [/PENDIENTE APROBACION/, "pendiente_aprobacion"],
+  [/MEDIANA/, "mediana"],
+  [/NO URGENTE|NO ES EMERGENCIA/, "no_urgente"],
+];
+function etiquetaDeTrello(nombres) {
+  const norm = nombres.map(normalizar);
+  for (const [patron, clave] of ETIQUETAS_TRELLO) {
+    if (norm.some((n) => patron.test(n))) return clave;
+  }
+  return "ninguna";
+}
+
 // ---------- Utilidades ----------
 
 /** MAYÚSCULAS sin acentos, 1:1 por carácter (conserva índices). */
@@ -406,6 +425,7 @@ for (const tarjeta of abiertas) {
     descripcion: partes.join("\n\n"),
     fechaLimite: fecha(tarjeta.due),
     urgente,
+    etiqueta: etiquetaDeTrello(etiquetas),
     checks,
     pos: tarjeta.pos,
     hechaEn: estado === "hecha" ? tarjeta.dateLastActivity : null,
@@ -490,6 +510,12 @@ if (!url || !claveSecreta) {
   process.exit(0);
 }
 const supabase = createClient(url, claveSecreta);
+
+// Sonda: ¿existe ya la columna etiqueta (020)? Si no, solo se escribe
+// `urgente` y la prioridad queda en la línea «Prioridad: …».
+const ETIQUETAS_DISPONIBLES = !(
+  await supabase.from("tarjetas").select("etiqueta").limit(1)
+).error;
 
 async function ok(consulta, contexto) {
   const res = await consulta;
@@ -716,6 +742,7 @@ for (const f of aPisar) {
         estado: f.estado,
         fecha_limite: f.fechaLimite,
         urgente: f.urgente,
+        ...(ETIQUETAS_DISPONIBLES ? { etiqueta: f.etiqueta } : {}),
       })
       .eq("id", t.id),
     `pisar tarjeta ${f.shortLink}`,
@@ -755,6 +782,7 @@ for (const f of aCrear.sort((a, b) => a.pos - b.pos)) {
         posicion: pos,
         fecha_limite: f.fechaLimite,
         urgente: f.urgente,
+        ...(ETIQUETAS_DISPONIBLES ? { etiqueta: f.etiqueta } : {}),
       })
       .select("id"),
     `crear tarjeta ${f.shortLink}`,

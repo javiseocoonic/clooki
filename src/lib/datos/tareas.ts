@@ -30,6 +30,9 @@ export interface DatosTareas {
    *  null = la tabla aún no existe (migración 019 sin ejecutar): el
    *  tablero oculta la sección en vez de ofrecer algo que fallaría. */
   comentarios: TarjetaComentario[] | null;
+  /** false = la columna `etiqueta` aún no existe (migración 020 sin
+   *  ejecutar): el tablero enseña solo el botón «Urgente» de antes. */
+  etiquetasDisponibles: boolean;
   /** Cronómetros activos de la persona (bandeja de la cabecera). */
   sesiones: SesionCronometro[];
 }
@@ -78,6 +81,7 @@ export async function cargarTareas(
     asignacionesRes,
     checksRes,
     comentariosRes,
+    etiquetasRes,
     sesionesRes,
   ] = await Promise.all([
     supabase.from("clientes").select("*").eq("activo", true).order("nombre"),
@@ -95,6 +99,8 @@ export async function cargarTareas(
       .select("*")
       .order("creada_en")
       .range(0, 9999),
+    // Sonda: ¿existe ya la columna etiqueta (020)? Falla = no.
+    supabase.from("tarjetas").select("etiqueta").limit(1),
     supabase
       .from("cronometros")
       .select("*")
@@ -124,6 +130,7 @@ export async function cargarTareas(
     })),
     checks: checksRes.data ?? [],
     comentarios: comentariosRes.error ? null : (comentariosRes.data ?? []),
+    etiquetasDisponibles: !etiquetasRes.error,
     sesiones: sesionesRes.data ?? [],
   };
 }
