@@ -86,6 +86,26 @@ export async function alternarActivo(formulario: FormData) {
   revalidatePath("/gestion");
 }
 
+// Renombrar una persona sin tocar su correo: los correos de becarios
+// (digital.m@, contenidos.m@…) pasan de una persona a otra y basta con
+// cambiar el nombre para que las horas y tarjetas sigan colgando de la
+// misma ficha. Solo admin (policy personas_update_admin).
+export async function renombrarPersona(formulario: FormData) {
+  const id = String(formulario.get("id") ?? "");
+  const nombre = String(formulario.get("nombre") ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!id || !nombre || nombre.length > 80) fallo();
+
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase
+    .from("personas")
+    .update({ nombre })
+    .eq("id", id);
+  if (error) fallo();
+  revalidatePath("/gestion");
+}
+
 export async function alternarRol(formulario: FormData) {
   const id = String(formulario.get("id") ?? "");
   const rol = String(formulario.get("rol") ?? "");

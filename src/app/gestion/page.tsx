@@ -13,6 +13,7 @@ import {
   crearClienteConProyectos,
   crearPersona,
   crearProyecto,
+  renombrarPersona,
 } from "./acciones";
 
 export const metadata: Metadata = { title: "Gestión · Clooki" };
@@ -287,6 +288,39 @@ export default async function PaginaGestion({
                           admin
                         </span>
                       )}
+                      {/* Renombrar sin tocar el correo: los correos de
+                          becarios cambian de persona y la ficha (con sus
+                          horas y tarjetas) debe seguir siendo la misma. */}
+                      <details className="relative">
+                        <summary
+                          className={`${ESTILO_BOTON_SUAVE} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
+                        >
+                          Renombrar
+                        </summary>
+                        <form
+                          action={renombrarPersona}
+                          className="absolute right-0 top-full z-10 mt-1 flex w-72 max-w-[calc(100vw-2rem)] gap-2 rounded-lg border border-borde bg-superficie p-2 shadow-lg"
+                        >
+                          <input type="hidden" name="id" value={p.id} />
+                          <label className="sr-only" htmlFor={`nombre-${p.id}`}>
+                            Nuevo nombre para {p.email}
+                          </label>
+                          <input
+                            id={`nombre-${p.id}`}
+                            name="nombre"
+                            required
+                            maxLength={80}
+                            defaultValue={p.nombre}
+                            className={`${ESTILO_INPUT} h-9 min-w-0 flex-1`}
+                          />
+                          <BotonEnvio
+                            className="h-9 rounded-lg border border-borde-fuerte px-3 text-sm font-medium text-texto transition-colors hover:border-acento hover:text-acento focus-visible:outline-2 focus-visible:outline-acento"
+                            pendienteTexto="Guardando…"
+                          >
+                            Guardar
+                          </BotonEnvio>
+                        </form>
+                      </details>
                       {p.id !== datos.persona.id && (
                         <>
                           <form action={alternarRol}>
