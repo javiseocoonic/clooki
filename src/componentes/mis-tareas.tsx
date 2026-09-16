@@ -53,6 +53,9 @@ export function MisTareas({
   const idBase = useId();
   const [abierto, setAbierto] = useState(false);
   const [busqueda, setBusqueda] = useState("");
+  // Cada bloque se pliega por separado (decide qué lista ver).
+  const [verMias, setVerMias] = useState(true);
+  const [verCreadas, setVerCreadas] = useState(true);
   const [anuncio, setAnuncio] = useState("");
   const tarjetasRef = useRef(tarjetas);
   useEffect(() => {
@@ -226,8 +229,11 @@ export function MisTareas({
         >
           Mis tareas
           {n > 0 && (
-            <span className="rounded-full bg-acento px-1.5 py-0.5 text-xs font-semibold tabular-nums text-superficie">
-              {n}
+            <span
+              title={`${nMias} asignadas a ti / ${nCreadas} creadas por ti`}
+              className="rounded-full bg-acento px-1.5 py-0.5 text-xs font-semibold tabular-nums text-superficie"
+            >
+              {nMias}/{nCreadas}
             </span>
           )}
         </button>
@@ -291,25 +297,58 @@ export function MisTareas({
               Ninguna tarea coincide
             </p>
           ) : (
-          <>
-          {miasVisibles.length > 0 && creadasVisibles.length > 0 && (
-            <p className="px-1 pt-2 text-xs font-semibold text-tinta">
-              Asignadas a mí
-            </p>
-          )}
-          {listaGrupos(miasVisibles, false)}
-          {creadasVisibles.length > 0 && (
-            <>
-              <p className="mt-2 border-t border-borde px-1 pt-2 text-xs font-semibold text-tinta">
-                Creadas por mí
-                <span className="ml-1 font-normal text-texto-suave">
-                  · las llevan otros, las sigues hasta que se terminen
-                </span>
-              </p>
-              {listaGrupos(creadasVisibles, true)}
-            </>
-          )}
-          </>
+          <div className="mt-2 flex flex-col gap-2">
+            {miasVisibles.length > 0 && (
+              <section
+                aria-labelledby={`${idBase}-mias`}
+                className="rounded-lg bg-acento-suave/40 p-1.5"
+              >
+                <button
+                  type="button"
+                  id={`${idBase}-mias`}
+                  aria-expanded={verMias}
+                  onClick={() => setVerMias((v) => !v)}
+                  className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-semibold text-tinta transition-colors hover:bg-acento-suave focus-visible:outline-2 focus-visible:outline-acento"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`text-[10px] text-texto-suave transition-transform ${verMias ? "rotate-90" : ""}`}
+                  >
+                    ▶
+                  </span>
+                  Asignadas a mí
+                  <span className="font-normal text-texto-suave">· {nMias}</span>
+                </button>
+                {verMias && listaGrupos(miasVisibles, false)}
+              </section>
+            )}
+            {creadasVisibles.length > 0 && (
+              <section
+                aria-labelledby={`${idBase}-creadas`}
+                className="rounded-lg bg-aviso-suave/60 p-1.5"
+              >
+                <button
+                  type="button"
+                  id={`${idBase}-creadas`}
+                  aria-expanded={verCreadas}
+                  onClick={() => setVerCreadas((v) => !v)}
+                  className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs font-semibold text-tinta transition-colors hover:bg-aviso-suave focus-visible:outline-2 focus-visible:outline-acento"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`text-[10px] text-texto-suave transition-transform ${verCreadas ? "rotate-90" : ""}`}
+                  >
+                    ▶
+                  </span>
+                  Creadas por mí
+                  <span className="font-normal text-texto-suave">
+                    · {nCreadas} · las llevan otros, las sigues hasta el final
+                  </span>
+                </button>
+                {verCreadas && listaGrupos(creadasVisibles, true)}
+              </section>
+            )}
+          </div>
           )}
           <p className="mt-2 border-t border-borde px-1 pt-2 text-xs text-texto-suave">
             <Link
@@ -329,8 +368,12 @@ export function MisTareas({
     return (
           <ul className="flex flex-col">
             {grupos.map((grupo) => (
-              <li key={grupo[0].cliente.id}>
-                <p className="px-1 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-texto-suave">
+              <li key={grupo[0].cliente.id} className="mt-1">
+                <p
+                  className={`rounded-md px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-texto ${
+                    creadas ? "bg-aviso-suave" : "bg-acento-suave"
+                  }`}
+                >
                   {grupo[0].cliente.nombre}
                 </p>
                 <ul className="flex flex-col">
