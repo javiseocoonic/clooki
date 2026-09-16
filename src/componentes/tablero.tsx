@@ -33,6 +33,9 @@ type MiembroEquipo = Pick<Persona, "id" | "nombre">;
 const SALTO = 1024;
 const UMBRAL_RENUMERAR = 0.001;
 
+/** Valor del filtro por persona que significa «tarjetas sin nadie». */
+const SIN_ASIGNAR = "sin-asignar";
+
 /**
  * Normaliza para comparar: minúsculas y sin acentos. Da la clave del
  * tipo de trabajo (que «Diseño» y «Diseno» de clientes distintos cuenten
@@ -892,8 +895,11 @@ export function Tablero({
     () =>
       tarjetas.filter((t) => {
         if (soloMias && !t.asignados.includes(personaId)) return false;
-        if (personaFiltro !== "" && !t.asignados.includes(personaFiltro))
+        if (personaFiltro === SIN_ASIGNAR) {
+          if (t.asignados.length > 0) return false;
+        } else if (personaFiltro !== "" && !t.asignados.includes(personaFiltro)) {
           return false;
+        }
         if (tipoFiltro !== "" && tipoPorProyecto.get(t.proyecto_id) !== tipoFiltro)
           return false;
         if (estadoFiltro !== "" && t.estado !== estadoFiltro) return false;
@@ -2307,6 +2313,7 @@ export function Tablero({
               className={SELECT_FILTRO}
             >
               <option value="">Todas las personas</option>
+              <option value={SIN_ASIGNAR}>Sin asignar</option>
               {equipo.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.nombre}
@@ -2345,9 +2352,25 @@ export function Tablero({
               Carga
             </span>
             {resumenCarga.sinAsignar > 0 && (
-              <span className="rounded-full bg-aviso-suave px-2.5 py-1 text-xs font-medium tabular-nums text-aviso">
+              <button
+                type="button"
+                aria-pressed={personaFiltro === SIN_ASIGNAR}
+                title={
+                  personaFiltro === SIN_ASIGNAR
+                    ? "Quitar el filtro"
+                    : "Ver solo las tarjetas sin asignar"
+                }
+                onClick={() =>
+                  setPersonaFiltro(personaFiltro === SIN_ASIGNAR ? "" : SIN_ASIGNAR)
+                }
+                className={`rounded-full border px-2.5 py-1 text-xs font-medium tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-acento ${
+                  personaFiltro === SIN_ASIGNAR
+                    ? "border-aviso bg-aviso text-sobre-marca"
+                    : "border-transparent bg-aviso-suave text-aviso hover:border-aviso"
+                }`}
+              >
                 Sin asignar · {resumenCarga.sinAsignar}
-              </span>
+              </button>
             )}
             {resumenCarga.personas.map(([id, n]) => {
               const activa = personaFiltro === id;
