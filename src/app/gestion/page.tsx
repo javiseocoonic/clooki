@@ -32,7 +32,7 @@ function BotonArchivar({
   id,
   activo,
 }: {
-  tabla: "clientes" | "proyectos" | "personas" | "tipos";
+  tabla: "clientes" | "proyectos" | "personas";
   id: string;
   activo: boolean;
 }) {
@@ -57,8 +57,12 @@ export default async function PaginaGestion({
   const datos = await cargarAdmin();
   if (!datos) redirect("/");
 
-  const { personas, clientes, tipos, proyectos } = datos;
-  const tiposActivos = tipos.filter((t) => t.activo);
+  const { personas, clientes, proyectos } = datos;
+  // Catálogo de tipos = nombres distintos de proyectos (activos o no);
+  // no hay tabla propia (ver gestion/acciones.ts).
+  const tipos = [...new Set(proyectos.map((p) => p.nombre))].sort((a, b) =>
+    a.localeCompare(b, "es"),
+  );
   const clientesConProyectos = clientes
     .filter((c) => c.activo)
     .map((c) => ({
@@ -136,19 +140,19 @@ export default async function PaginaGestion({
                   id="nuevo-cliente-tipos"
                   name="tipos"
                   multiple
-                  size={Math.min(6, Math.max(3, tiposActivos.length))}
+                  size={Math.min(6, Math.max(3, tipos.length))}
                   className={`${ESTILO_INPUT} h-auto py-1`}
                 >
-                  {tiposActivos.map((t) => (
-                    <option key={t.id} value={t.id} className="px-1 py-0.5">
-                      {t.nombre}
+                  {tipos.map((t) => (
+                    <option key={t} value={t} className="px-1 py-0.5">
+                      {t}
                     </option>
                   ))}
                 </select>
               </form>
 
-              {/* Catálogo de tipos: común a todos los clientes (019). Un
-                  tipo nuevo aparece como casilla en todos los clientes. */}
+              {/* Catálogo de tipos, común a todos los clientes. Un tipo
+                  nuevo aparece como casilla sin marcar en todos ellos. */}
               <form
                 action={crearTipo}
                 className="mb-2 flex flex-wrap gap-2 rounded-lg bg-superficie-2 p-3"
@@ -174,13 +178,10 @@ export default async function PaginaGestion({
               <ul className="mb-4 flex flex-wrap gap-1.5">
                 {tipos.map((t) => (
                   <li
-                    key={t.id}
-                    className={`flex items-center gap-1 rounded-md border border-borde px-2 py-0.5 text-xs ${
-                      t.activo ? "text-texto" : "text-texto-suave line-through"
-                    }`}
+                    key={t}
+                    className="rounded-md border border-borde px-2 py-0.5 text-xs text-texto"
                   >
-                    {t.nombre}
-                    <BotonArchivar tabla="tipos" id={t.id} activo={t.activo} />
+                    {t}
                   </li>
                 ))}
               </ul>
@@ -215,30 +216,20 @@ export default async function PaginaGestion({
                           <BotonArchivar tabla="clientes" id={c.id} activo={c.activo} />
                         </summary>
 
-                        {/* Una casilla por tipo del catálogo. Un tipo
-                            archivado solo asoma si el cliente aún lo tiene
-                            marcado, para poder quitárselo. */}
+                        {/* Una casilla por tipo del catálogo. */}
                         <ul className="mb-2 ml-5 grid gap-x-4 sm:grid-cols-2">
-                          {tipos
-                            .filter(
-                              (t) =>
-                                t.activo ||
-                                suyos.some((p) => p.tipo_id === t.id && p.activo),
-                            )
-                            .map((t) => (
-                              <li key={t.id}>
-                                <CasillaTipo
-                                  clienteId={c.id}
-                                  tipoId={t.id}
-                                  nombre={t.nombre}
-                                  activo={suyos.some(
-                                    (p) => p.tipo_id === t.id && p.activo,
-                                  )}
-                                  archivado={!t.activo}
-                                  accion={alternarTipoCliente}
-                                />
-                              </li>
-                            ))}
+                          {tipos.map((t) => (
+                            <li key={t}>
+                              <CasillaTipo
+                                clienteId={c.id}
+                                nombre={t}
+                                activo={suyos.some(
+                                  (p) => p.nombre === t && p.activo,
+                                )}
+                                accion={alternarTipoCliente}
+                              />
+                            </li>
+                          ))}
                         </ul>
                       </details>
                     </li>

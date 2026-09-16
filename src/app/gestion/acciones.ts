@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { CLIENTE_INTERNO } from "@/lib/datos/admin";
 import { crearClienteServidor } from "@/lib/supabase/servidor";
 
 // Las políticas RLS ya garantizan que solo un admin puede escribir en
@@ -12,24 +13,50 @@ function fallo(): never {
   redirect("/gestion?error=1");
 }
 
-// Los tipos de proyecto son un catálogo común (019): un cliente nuevo
-// nace con los tipos marcados en el select múltiple; cada uno es una
-// fila en proyectos con el nombre del tipo copiado.
+// ---------- Tipos de proyecto ----------
+// Decisión Javi (16 sep 2026): los tipos (Diseño, Audiovisual, RRSS…)
+// son un catálogo común a todos los clientes y cada cliente marca con
+// una casilla cuáles tiene. Sin tabla nueva: el catálogo es el conjunto
+// de nombres distintos de `proyectos` (activos o no). Un tipo recién
+// creado, que aún no tiene ningún cliente, se persiste como fila
+// DESACTIVADA del cliente interno «Coonic (interno)», que existe
+// siempre; así aparece como casilla sin marcar en todos los clientes.
+// Marcar crea la fila (o la reactiva); desmarcar solo la desactiva:
+// nunca se borra, porque horas, cronómetros y tarjetas cuelgan de ella.
+
+function limpiarNombreTipo(valor: FormDataEntryValue | null): string {
+  return String(valor ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Nombres del catálogo actual (distintos, sin importar activo). */
+async function catalogoTipos(
+  supabase: Awaited<ReturnType<typeof crearClienteServidor>>,
+): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("proyectos")
+    .select("nombre")
+    .range(0, 9999);
+  if (error) fallo();
+  return new Set((data ?? []).map((p) => p.nombre));
+}
+
 export async function crearClienteConProyectos(formulario: FormData) {
   const nombre = String(formulario.get("nombre") ?? "").trim();
   if (!nombre) fallo();
-  const tipoIds = formulario
-    .getAll("tipos")
-    .map((t) => String(t))
-    .filter(Boolean);
 
   const supabase = await crearClienteServidor();
-  const { data: tipos, error: errorTipos } = await supabase
-    .from("tipos")
-    .select("id, nombre")
-    .in("id", tipoIds)
-    .eq("activo", true);
-  if (errorTipos) fallo();
+  const catalogo = await catalogoTipos(supabase);
+  // Solo nombres que existan en el catálogo: el select no inventa tipos.
+  const tipos = [
+    ...new Set(
+      formulario
+        .getAll("tipos")
+        .map(limpiarNombreTipo)
+        .filter((t) => catalogo.has(t)),
+    ),
+  ];
 
   const { data: cliente, error } = await supabase
     .from("clientes")
@@ -38,69 +65,69 @@ export async function crearClienteConProyectos(formulario: FormData) {
     .single();
   if (error || !cliente) fallo();
 
-  if (tipos && tipos.length > 0) {
-    const { error: errorProyectos } = await supabase.from("proyectos").insert(
-      tipos.map((t) => ({
-        cliente_id: cliente.id,
-        tipo_id: t.id,
-        nombre: t.nombre,
-      })),
-    );
+  if (tipos.length > 0) {
+    const { error: errorProyectos } = await supabase
+      .from("proyectos")
+      .insert(tipos.map((t) => ({ cliente_id: cliente.id, nombre: t })));
     if (errorProyectos) fallo();
   }
   revalidatePath("/gestion");
 }
 
 export async function crearTipo(formulario: FormData) {
-  const nombre = String(formulario.get("nombre") ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
+  const nombre = limpiarNombreTipo(formulario.get("nombre"));
   if (!nombre || nombre.length > 60) fallo();
 
   const supabase = await crearClienteServidor();
-  // El nombre es único en la BD; un duplicado cae en fallo() y la
-  // página avisa.
-  const { error } = await supabase.from("tipos").insert({ nombre });
+  const catalogo = await catalogoTipos(supabase);
+  const repetido = [...catalogo].some(
+    (t) => t.localeCompare(nombre, "es", { sensitivity: "base" }) === 0,
+  );
+  if (repetido) fallo();
+
+  const { data: interno } = await supabase
+    .from("clientes")
+    .select("id")
+    .eq("nombre", CLIENTE_INTERNO)
+    .maybeSingle();
+  if (!interno) fallo();
+
+  const { error } = await supabase
+    .from("proyectos")
+    .insert({ cliente_id: interno.id, nombre, activo: false });
   if (error) fallo();
   revalidatePath("/gestion");
 }
 
-// Casilla de tipo en un cliente. Marcar crea la fila de proyectos si no
-// existía (o la reactiva); desmarcar solo la desactiva: nunca se borra,
-// porque horas, cronómetros y tarjetas cuelgan de ella.
 export async function alternarTipoCliente(formulario: FormData) {
   const clienteId = String(formulario.get("cliente_id") ?? "");
-  const tipoId = String(formulario.get("tipo_id") ?? "");
+  const nombre = limpiarNombreTipo(formulario.get("nombre"));
   const activar = formulario.get("activar") === "1";
-  if (!clienteId || !tipoId) fallo();
+  if (!clienteId || !nombre) fallo();
 
   const supabase = await crearClienteServidor();
-  const { data: existente, error: errorBusqueda } = await supabase
+  const { data: existentes, error: errorBusqueda } = await supabase
     .from("proyectos")
     .select("id, activo")
     .eq("cliente_id", clienteId)
-    .eq("tipo_id", tipoId)
-    .maybeSingle();
+    .eq("nombre", nombre);
   if (errorBusqueda) fallo();
 
-  if (existente) {
-    if (existente.activo !== activar) {
-      const { error } = await supabase
-        .from("proyectos")
-        .update({ activo: activar })
-        .eq("id", existente.id);
-      if (error) fallo();
-    }
-  } else if (activar) {
-    const { data: tipo } = await supabase
-      .from("tipos")
-      .select("id, nombre")
-      .eq("id", tipoId)
-      .maybeSingle();
-    if (!tipo) fallo();
+  if (existentes && existentes.length > 0) {
     const { error } = await supabase
       .from("proyectos")
-      .insert({ cliente_id: clienteId, tipo_id: tipo.id, nombre: tipo.nombre });
+      .update({ activo: activar })
+      .in(
+        "id",
+        existentes.map((p) => p.id),
+      );
+    if (error) fallo();
+  } else if (activar) {
+    const catalogo = await catalogoTipos(supabase);
+    if (!catalogo.has(nombre)) fallo();
+    const { error } = await supabase
+      .from("proyectos")
+      .insert({ cliente_id: clienteId, nombre });
     if (error) fallo();
   }
   revalidatePath("/gestion");
@@ -123,7 +150,7 @@ export async function crearPersona(formulario: FormData) {
   revalidatePath("/gestion");
 }
 
-const TABLAS_ARCHIVABLES = ["clientes", "proyectos", "personas", "tipos"] as const;
+const TABLAS_ARCHIVABLES = ["clientes", "proyectos", "personas"] as const;
 
 export async function alternarActivo(formulario: FormData) {
   const tabla = String(formulario.get("tabla") ?? "");
