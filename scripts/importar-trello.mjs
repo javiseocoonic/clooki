@@ -71,7 +71,7 @@ const ALIAS_CLIENTES = [
   [/TURISMO COSTA DEL SOL|\bTCS\b/, "Turismo Costa del Sol"],
   [/TURISMO (DE )?MALAGA|AYTO\.? TURISMO/, "Turismo de Málaga"],
   [/MI ?COLCHON|MICOLHON/, "Micolchón"],
-  [/EL INGENIO/, "El Ingenio"],
+  [/(EL )?INGENIO\b/, "El Ingenio"],
   // El distrito 6 (Cruz de Humilladero) es cliente propio, como
   // Campanillas o Ciudad Jardín. Va antes que Limasam a propósito: en
   // títulos mixtos («LIMASAM - CRUZ HUMILLADERO») gana el distrito.
@@ -108,7 +108,7 @@ const ALIAS_CLIENTES = [
   [/MENDALERENDA/, "Mendalerenda"],
   [/GUAJES?\b/, "Guajes"],
   // ---- Añadidos para el tablero de Diseño (jul 2026) ----
-  [/AEHCOS/, "Aehcos"],
+  [/AEHCOS|AECHOS/, "Aehcos"],
   [/JUSTICIA/, "Justicia"],
   [/PARTICIPACION CIUDADANA/, "Participación Ciudadana"],
   [/PENA JUAN BREVA/, "Peña Juan Breva"],
@@ -149,13 +149,21 @@ const ALIAS_CLIENTES = [
   [/VIAMED|VIANEXO|\bVAULT\b/, "Viamed"],
   [/\bAPECOM\b/, "Apecom"],
   [/HOSPITAL REGIONAL/, "Hospital Regional Universitario"],
+  // ---- Añadidos en la sincronización de Diseño (sep 2026) ----
+  [/FUNDACION PEREZ ESTRADA|PEREZ ESTRADA/, "Fundación Pérez Estrada"],
+  [/CONSEJERIA IA|\bIA JUNTA/, "IA Junta de Andalucía"],
+  [/RUTA DEL VINO (DE )?RONDA/, "Ruta del Vino de Ronda"],
+  [/\bIGUALDAD\b/, "Ayuntamiento de Málaga"],
+  [/\bACET\b/, "ACET Torre del Mar"],
   // Genéricos al final a propósito: que primero casen los específicos
   // («AYTO. TURISMO» → Turismo de Málaga, «JUNTA ANDALUCÍA», TCS…).
   [/\bAYTO\b/, "Ayuntamiento de Málaga"],
   [/\bJUNTA\b/, "Junta de Andalucía"],
   [/\bTURISMO\b|\bCAPITALIDAD\b/, "Turismo de Málaga"],
   [/\bACADEMIA\b/, "Academia Gastronómica"],
-  [/\bCOONIC\b/, "Coonic (interno)"],
+  // Los concursos (propuestas a licitación) son trabajo propio hasta
+  // que se ganan; el de fritura casa antes con Academia Gastronómica.
+  [/\bCONCURSO\b|\bCOONIC\b/, "Coonic (interno)"],
 ];
 
 // Tarjetas cuyo cliente no se deduce del título: shortLink de Trello →
@@ -182,6 +190,9 @@ const CLIENTE_MANUAL = new Map([
   ["aNSOpZkE", "Coonic (interno)"], // Banner en publicaciones
   ["tiIJiEAx", "Coonic (interno)"], // Gálvez cambios
   ["ORDsyCSM", "Coonic (interno)"], // Transferencia ARGCISA
+  // Diseño, sep 2026.
+  ["IbI7gWKT", "Coonic (interno)"], // Reconocimiento Arturo Bernal
+  ["5ZSXA5FU", "Coonic (interno)"], // Esther Arroyo · Black Days
 ]);
 
 // Lista de Trello con nombre de persona → palabras que deben aparecer
