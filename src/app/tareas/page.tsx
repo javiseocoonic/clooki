@@ -15,10 +15,13 @@ export default async function PaginaTareas({
 }: {
   searchParams: Promise<{ [clave: string]: string | string[] | undefined }>;
 }) {
-  const { archivadas, tarjeta, comentario } = await searchParams;
+  const { archivadas, tarjeta, comentario, v } = await searchParams;
   const verArchivadas = archivadas === "1";
   const detalleInicial = typeof tarjeta === "string" ? tarjeta : null;
   const comentarioInicial = typeof comentario === "string" ? comentario : null;
+  // Cambia con cada aviso pulsado (incluye `v`): el tablero, ya montado,
+  // reabre la tarjeta al ver cambiar esta clave.
+  const claveApertura = [detalleInicial, comentarioInicial, v ?? ""].join("|");
 
   const datos = await cargarTareas(verArchivadas);
   if (!datos) redirect("/");
@@ -49,6 +52,7 @@ export default async function PaginaTareas({
             verArchivadas={verArchivadas}
             detalleInicial={detalleInicial}
             comentarioInicial={comentarioInicial}
+            claveApertura={claveApertura}
           />
         </main>
       </div>

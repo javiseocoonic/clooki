@@ -40,6 +40,7 @@ export function Notificaciones({
   const [avisos, setAvisos] = useState(iniciales);
   const [abierto, setAbierto] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const contadorRef = useRef(0);
 
   const sinLeer = avisos.filter((a) => !a.leida_en).length;
 
@@ -74,9 +75,13 @@ export function Notificaciones({
   function abrir(a: NotificacionVista) {
     if (!a.leida_en) void marcarLeida([a.id]);
     setAbierto(false);
+    // `v` cambia en cada pulsación: así el tablero, si ya está abierto,
+    // sabe que debe volver a abrir la tarjeta aunque sea la misma.
+    contadorRef.current += 1;
+    const v = contadorRef.current;
     const destino = a.comentario_id
-      ? `/tareas?tarjeta=${a.tarjeta_id}&comentario=${a.comentario_id}`
-      : `/tareas?tarjeta=${a.tarjeta_id}`;
+      ? `/tareas?tarjeta=${a.tarjeta_id}&comentario=${a.comentario_id}&v=${v}`
+      : `/tareas?tarjeta=${a.tarjeta_id}&v=${v}`;
     router.push(destino);
   }
 

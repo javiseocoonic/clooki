@@ -795,6 +795,7 @@ export function Tablero({
   verArchivadas,
   detalleInicial = null,
   comentarioInicial = null,
+  claveApertura = "",
 }: {
   personaId: string;
   esAdmin: boolean;
@@ -810,6 +811,9 @@ export function Tablero({
   /** Comentario a resaltar dentro del detalle (viene de ?comentario=id,
    *  desde la campana de avisos). */
   comentarioInicial?: string | null;
+  /** Cambia con cada apertura pedida desde fuera (tarjeta|comentario|v):
+   *  el tablero ya montado reabre el detalle al verla cambiar. */
+  claveApertura?: string;
 }) {
   const supabase = useMemo(() => crearClienteNavegador(), []);
   const crono = useCronometros();
@@ -923,12 +927,28 @@ export function Tablero({
   }, [detalle]);
   useFocoAtrapado(detalle !== null, dialogoRef);
 
-  // Llegada desde un aviso de mención: desplazar hasta el comentario.
+  // Apertura pedida desde fuera (campana de avisos, enlace compartido):
+  // el tablero puede estar ya montado, así que no basta con el estado
+  // inicial — se reabre cada vez que cambia la clave. Se lee `tarjetas`
+  // por ref para no reabrir el detalle cada vez que cambian las tarjetas.
+  const tarjetasRef = useRef(tarjetas);
+  useEffect(() => {
+    tarjetasRef.current = tarjetas;
+  }, [tarjetas]);
+  useEffect(() => {
+    if (!detalleInicial) return;
+    if (tarjetasRef.current.some((t) => t.id === detalleInicial)) {
+      setDetalle(detalleInicial);
+    }
+  }, [claveApertura, detalleInicial]);
+
+  // Llegada desde un aviso de mención: desplazar hasta el comentario una
+  // vez pintado el detalle.
   useEffect(() => {
     if (!detalle || !comentarioInicial) return;
     const el = document.getElementById(`comentario-${comentarioInicial}`);
     el?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [detalle, comentarioInicial]);
+  }, [detalle, comentarioInicial, claveApertura]);
 
   // Tipos de trabajo = nombres de proyecto distintos (Audiovisual,
   // Consultoría, Desarrollo web…). El tipo es un atributo de la tarea —
