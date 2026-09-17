@@ -7,6 +7,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { crearClienteNavegador } from "@/lib/supabase/navegador";
+import { PREFIJO_HECHA } from "@/lib/avisos";
 import type { NotificacionVista } from "@/lib/datos/notificaciones";
 
 /** «hace 5 min», «hace 3 h», «ayer», «12 sep». */
@@ -161,12 +162,15 @@ export function Notificaciones({
                         }`}
                       >
                         <span className="font-semibold">{a.origen}</span>
-                        {a.tipo === "mencion"
-                          ? " te ha mencionado en "
-                          : " te ha asignado "}
+                        {a.extracto?.startsWith(PREFIJO_HECHA)
+                          ? " ha terminado "
+                          : a.tipo === "mencion"
+                            ? " te ha mencionado en "
+                            : " te ha asignado "}
                         <span className="font-medium">«{a.titulo}»</span>
+                        {a.extracto?.startsWith(PREFIJO_HECHA) && ". ¡Revísala!"}
                       </span>
-                      {a.extracto && (
+                      {a.extracto && !a.extracto.startsWith(PREFIJO_HECHA) && (
                         <span className="block truncate text-xs text-texto-suave">
                           {a.extracto}
                         </span>

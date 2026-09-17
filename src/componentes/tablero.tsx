@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { crearClienteNavegador } from "@/lib/supabase/navegador";
 import { limpiarTarea } from "@/lib/semana";
+import { avisarHecha } from "@/lib/avisos";
 import {
   ETIQUETAS,
   ETIQUETA_POR_CLAVE,
@@ -1398,6 +1399,15 @@ export function Tablero({
       return;
     }
     setAnuncio(`«${t.titulo}» → ${ETIQUETA_ESTADO[estado]}.`);
+    // Hecha por otra persona: aviso al creador (vía comentario automático).
+    if (estado === "hecha" && hiloDisponible) {
+      const c = await avisarHecha(
+        supabase,
+        { ...t, creador: nombrePersona.get(t.creada_por) ?? "?" },
+        personaId,
+      );
+      if (c) setComentarios((prev) => [...prev, c]);
+    }
   }
 
   async function alternarme(t: TarjetaTablero) {

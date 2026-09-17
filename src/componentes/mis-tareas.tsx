@@ -9,11 +9,13 @@ import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { crearClienteNavegador } from "@/lib/supabase/navegador";
 import { idLinea, limpiarTarea } from "@/lib/semana";
+import { avisarHecha } from "@/lib/avisos";
 import { useCronometros } from "./cronometros";
 import type { LineaSemana, TarjetaMia } from "@/lib/datos/mi-semana";
 import type { Cliente, Proyecto } from "@/lib/tipos";
 
 interface Props {
+  personaId: string;
   clientes: (Cliente & { proyectos: Proyecto[] })[];
   /** Estado controlado por la rejilla: el check de línea completada y
    *  este panel comparten las mismas tarjetas (marcar en un sitio se
@@ -41,6 +43,7 @@ function normalizar(texto: string): string {
 }
 
 export function MisTareas({
+  personaId,
   clientes,
   tarjetas,
   alCambiar: setTarjetas,
@@ -208,6 +211,8 @@ export function MisTareas({
     }
     setTarjetas((prev) => prev.filter((x) => x.id !== t.id));
     setAnuncio(`«${t.titulo}» hecha.`);
+    // Si la creó otra persona, que le llegue el aviso de revisarla.
+    void avisarHecha(supabase, t, personaId);
   }
 
   // ── Render ──

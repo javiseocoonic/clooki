@@ -29,6 +29,7 @@ import type {
   RegistroHoras,
   SesionCronometro,
 } from "@/lib/tipos";
+import { avisarHecha } from "@/lib/avisos";
 import type { LineaSemana, TarjetaMia } from "@/lib/datos/mi-semana";
 import { MisTareas } from "./mis-tareas";
 import { AnadirLinea } from "./anadir-linea";
@@ -1004,6 +1005,8 @@ export function RejillaSemana({
     }
     setTarjetasMias((prev) => prev.filter((t) => t.id !== tarjeta.id));
     mostrarBadge(`«${tarjeta.titulo}» hecha ✓`);
+    // Si la creó otra persona, que le llegue el aviso de revisarla.
+    void avisarHecha(supabase, tarjeta, personaId);
   }
 
   function botonesLinea(linea: LineaSemana) {
@@ -1558,6 +1561,7 @@ export function RejillaSemana({
         />
         <MisTareas
           clientes={clientes}
+          personaId={personaId}
           tarjetas={tarjetasMias}
           alCambiar={setTarjetasMias}
           clavesExistentes={clavesVisibles}

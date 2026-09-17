@@ -43,6 +43,8 @@ export type TarjetaMia = Pick<
   mia: boolean;
   /** Nombres de quienes la tienen asignada; vacío = sin coger. */
   asignados: string[];
+  /** Nombre de quien la creó (para el aviso «está hecha, revísala»). */
+  creador: string;
 };
 
 export interface DatosMiSemana {
@@ -235,6 +237,7 @@ export async function cargarMiSemana(
       asignados: (asignadosPorTarjeta.get(t.id) ?? []).sort((a, b) =>
         a.localeCompare(b, "es"),
       ),
+      creador: nombrePorPersona.get(t.creada_por) ?? "?",
     }));
 
   return {
