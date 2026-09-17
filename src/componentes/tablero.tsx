@@ -2332,7 +2332,7 @@ export function Tablero({
             >
               <svg
                 viewBox="0 0 16 16"
-                className="h-3.5 w-3.5"
+                className="h-4 w-4"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="1.6"
@@ -2343,7 +2343,7 @@ export function Tablero({
                 <path d="M6.5 9.5a2.5 2.5 0 0 0 3.5 0l2.5-2.5a2.5 2.5 0 0 0-3.5-3.5L8 4.5" />
                 <path d="M9.5 6.5a2.5 2.5 0 0 0-3.5 0L3.5 9a2.5 2.5 0 0 0 3.5 3.5L8 11.5" />
               </svg>
-              {enlaceCopiado === t.id ? "Enlace copiado" : "Compartir"}
+              {enlaceCopiado === t.id && "Enlace copiado"}
             </button>
             {puedeEditar(t) && (
               <button
