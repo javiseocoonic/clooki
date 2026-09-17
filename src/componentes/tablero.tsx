@@ -2327,7 +2327,11 @@ export function Tablero({
                   title={t.estado === e ? "Estado actual" : `Pasar a ${ETIQUETA_ESTADO[e]}`}
                   className={`h-7 rounded-full px-2.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-acento ${
                     t.estado === e
-                      ? CHIP_ESTADO[e]
+                      ? e === "pendiente"
+                        // El chip de pendiente comparte fondo con el grupo:
+                        // aquí se le da un fondo propio para que se vea elegido.
+                        ? "bg-superficie text-tinta shadow-sm ring-1 ring-borde-fuerte"
+                        : CHIP_ESTADO[e]
                       : "text-texto-suave hover:text-tinta"
                   }`}
                 >
