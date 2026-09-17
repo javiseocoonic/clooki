@@ -104,7 +104,7 @@ const ALIAS_CLIENTES = [
   [/\bSALSA\b/, "Salsa"],
   [/PAVIMENTOS/, "Pavimentos"],
   [/ZORROCALLAO/, "Zorrocallao"],
-  [/CORDIA/, "Cordia Formación"],
+  [/CORDIA/, "Cordia"],
   [/MENDALERENDA/, "Mendalerenda"],
   [/GUAJES?\b/, "Guajes"],
   // ---- Añadidos para el tablero de Diseño (jul 2026) ----
@@ -148,7 +148,7 @@ const ALIAS_CLIENTES = [
   [/CIUDAD CORRESPONSABLE/, "Ayuntamiento de Málaga"],
   [/VIAMED|VIANEXO|\bVAULT\b/, "Viamed"],
   [/\bAPECOM\b/, "Apecom"],
-  [/HOSPITAL REGIONAL/, "Hospital Regional Universitario"],
+  [/HOSPITAL REGIONAL/, "Hrum"],
   // ---- Añadidos en la sincronización de Diseño (sep 2026) ----
   [/FUNDACION PEREZ ESTRADA|PEREZ ESTRADA/, "Fundación Pérez Estrada"],
   [/CONSEJERIA IA|\bIA JUNTA/, "IA Junta de Andalucía"],
