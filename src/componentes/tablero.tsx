@@ -806,14 +806,13 @@ function FormularioComentario({
         valor={texto}
         alCambiar={setTexto}
         equipo={equipo}
-        alEnter={() => void enviar()}
         maxLength={2000}
         placeholder="Escribe un comentario… usa @ para mencionar"
         className="min-h-16 w-full resize-y rounded-md border border-borde bg-superficie px-2 py-1.5 text-sm text-tinta outline-none placeholder:text-texto-suave focus:border-acento focus:ring-2 focus:ring-acento/20"
       />
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] text-texto-suave">
-          Enter envía · Shift+Enter salta de línea
+          Enter salta de línea · publica con el botón
         </span>
         <button
           type="submit"
