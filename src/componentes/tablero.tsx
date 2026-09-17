@@ -32,6 +32,7 @@ import type {
   EstadoTarjeta,
   Persona,
   Proyecto,
+  Tarjeta,
   TarjetaCheck,
   TarjetaComentario,
 } from "@/lib/tipos";
@@ -985,6 +986,104 @@ export function Tablero({
     };
   }, [detalle]);
   useFocoAtrapado(detalle !== null, dialogoRef);
+
+  // Tiempo real (022): cambios de otras personas en tarjetas,
+  // asignaciones, subtareas y comentarios se aplican al momento. Los
+  // eventos de las propias escrituras también llegan y se funden de
+  // forma idempotente (mismo id = misma fila). Si las tablas no están en
+  // la publicación de Realtime, simplemente no llega nada.
+  useEffect(() => {
+    const canal = supabase
+      .channel("tablero-tiempo-real")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tarjetas" },
+        (p) => {
+          if (p.eventType === "DELETE") {
+            const id = (p.old as { id?: string }).id;
+            if (!id) return;
+            setTarjetas((prev) => prev.filter((t) => t.id !== id));
+            setDetalle((d) => (d === id ? null : d));
+            return;
+          }
+          const fila = p.new as Tarjeta;
+          setTarjetas((prev) => {
+            const i = prev.findIndex((t) => t.id === fila.id);
+            if (i === -1) {
+              // Desconocida: nueva o archivada que reaparece. Las hechas
+              // viejas no entran (el tablero no las carga).
+              if (fila.estado === "hecha" && p.eventType === "UPDATE") return prev;
+              return [...prev, { ...fila, asignados: [] }];
+            }
+            const copia = [...prev];
+            copia[i] = { ...fila, asignados: prev[i].asignados };
+            return copia;
+          });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tarjeta_asignaciones" },
+        (p) => {
+          const fila = (p.eventType === "DELETE" ? p.old : p.new) as {
+            tarjeta_id?: string;
+            persona_id?: string;
+          };
+          if (!fila.tarjeta_id || !fila.persona_id) return;
+          const { tarjeta_id, persona_id } = fila;
+          setTarjetas((prev) =>
+            prev.map((t) => {
+              if (t.id !== tarjeta_id) return t;
+              const tiene = t.asignados.includes(persona_id);
+              if (p.eventType === "DELETE") {
+                return tiene
+                  ? { ...t, asignados: t.asignados.filter((x) => x !== persona_id) }
+                  : t;
+              }
+              return tiene ? t : { ...t, asignados: [...t.asignados, persona_id] };
+            }),
+          );
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tarjeta_checks" },
+        (p) => {
+          if (p.eventType === "DELETE") {
+            const id = (p.old as { id?: string }).id;
+            if (id) setChecks((prev) => prev.filter((c) => c.id !== id));
+            return;
+          }
+          const fila = p.new as TarjetaCheck;
+          setChecks((prev) => {
+            const i = prev.findIndex((c) => c.id === fila.id);
+            if (i === -1) return [...prev, fila];
+            const copia = [...prev];
+            copia[i] = fila;
+            return copia;
+          });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tarjeta_comentarios" },
+        (p) => {
+          if (p.eventType === "DELETE") {
+            const id = (p.old as { id?: string }).id;
+            if (id) setComentarios((prev) => prev.filter((c) => c.id !== id));
+            return;
+          }
+          const fila = p.new as TarjetaComentario;
+          setComentarios((prev) =>
+            prev.some((c) => c.id === fila.id) ? prev : [...prev, fila],
+          );
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(canal);
+    };
+  }, [supabase]);
 
   // Apertura pedida desde fuera (campana de avisos, enlace compartido):
   // el tablero puede estar ya montado, así que no basta con el estado
