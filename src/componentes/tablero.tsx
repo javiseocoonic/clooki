@@ -310,13 +310,13 @@ function FormularioTarjeta({
       <label className="sr-only" htmlFor="tarjeta-descripcion">
         Descripción (opcional)
       </label>
-      <textarea
+      <AreaMenciones
         id="tarjeta-descripcion"
-        rows={2}
-        placeholder="Descripción (opcional)"
-        value={descripcion}
-        onChange={(e) => setDescripcion(e.target.value)}
-        className="rounded-lg border border-borde-fuerte bg-superficie px-2.5 py-1.5 text-sm text-tinta outline-none placeholder:text-texto-suave focus:border-acento focus:ring-2 focus:ring-acento/20"
+        valor={descripcion}
+        alCambiar={setDescripcion}
+        equipo={equipo}
+        placeholder="Descripción (opcional) · @ para mencionar a alguien"
+        className="w-full rounded-lg border border-borde-fuerte bg-superficie px-2.5 py-1.5 text-sm text-tinta outline-none placeholder:text-texto-suave focus:border-acento focus:ring-2 focus:ring-acento/20"
       />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -621,15 +621,34 @@ function TextoConMenciones({
  * despliega la lista del equipo filtrada; elegir a alguien inserta
  * «@Nombre Apellido ». Enter envía; Shift+Enter salta de línea.
  */
-function FormularioComentario({
+/**
+ * Área de texto con menciones: al escribir «@» (o «@Nom») se despliega
+ * la lista del equipo filtrada; elegir a alguien inserta «@Nombre
+ * Apellido ». Lo usan el redactor de comentarios y la descripción de
+ * la tarjeta. Con `alEnter`, Enter envía y Shift+Enter salta de línea;
+ * sin él, Enter es un salto de línea normal.
+ */
+function AreaMenciones({
+  id,
+  valor,
+  alCambiar,
   equipo,
-  alEnviar,
+  alEnter,
+  rows = 2,
+  maxLength,
+  placeholder,
+  className,
 }: {
+  id: string;
+  valor: string;
+  alCambiar: (valor: string) => void;
   equipo: MiembroEquipo[];
-  alEnviar: (texto: string) => Promise<void>;
+  alEnter?: () => void;
+  rows?: number;
+  maxLength?: number;
+  placeholder?: string;
+  className: string;
 }) {
-  const [texto, setTexto] = useState("");
-  const [enviando, setEnviando] = useState(false);
   const [sugerencia, setSugerencia] = useState<{
     inicio: number;
     consulta: string;
@@ -646,8 +665,8 @@ function FormularioComentario({
     : [];
 
   /** Detecta «@consulta» justo antes del cursor. */
-  function actualizarSugerencia(valor: string, cursor: number) {
-    const antes = valor.slice(0, cursor);
+  function actualizarSugerencia(texto: string, cursor: number) {
+    const antes = texto.slice(0, cursor);
     const m = antes.match(/(?:^|\s)@([^\s@]{0,30})$/);
     if (!m) {
       setSugerencia(null);
@@ -663,9 +682,9 @@ function FormularioComentario({
   function elegir(p: MiembroEquipo) {
     if (!sugerencia) return;
     const area = areaRef.current;
-    const cursor = area?.selectionStart ?? texto.length;
-    const nuevo = `${texto.slice(0, sugerencia.inicio)}@${p.nombre} ${texto.slice(cursor)}`;
-    setTexto(nuevo);
+    const cursor = area?.selectionStart ?? valor.length;
+    const nuevo = `${valor.slice(0, sugerencia.inicio)}@${p.nombre} ${valor.slice(cursor)}`;
+    alCambiar(nuevo);
     setSugerencia(null);
     const pos = sugerencia.inicio + p.nombre.length + 2;
     requestAnimationFrame(() => {
@@ -674,39 +693,17 @@ function FormularioComentario({
     });
   }
 
-  async function enviar() {
-    const limpio = texto.trim();
-    if (!limpio || enviando) return;
-    setEnviando(true);
-    try {
-      await alEnviar(limpio);
-      setTexto("");
-      setSugerencia(null);
-    } finally {
-      setEnviando(false);
-    }
-  }
-
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        void enviar();
-      }}
-      className="relative flex flex-col gap-1.5"
-    >
-      <label className="sr-only" htmlFor="nuevo-comentario">
-        Nuevo comentario
-      </label>
+    <div className="relative flex flex-col">
       <textarea
         ref={areaRef}
-        id="nuevo-comentario"
-        rows={2}
-        maxLength={2000}
-        placeholder="Escribe un comentario… usa @ para mencionar"
-        value={texto}
+        id={id}
+        rows={rows}
+        maxLength={maxLength}
+        placeholder={placeholder}
+        value={valor}
         onChange={(e) => {
-          setTexto(e.target.value);
+          alCambiar(e.target.value);
           actualizarSugerencia(e.target.value, e.target.selectionStart ?? 0);
         }}
         onKeyDown={(e) => {
@@ -732,12 +729,12 @@ function FormularioComentario({
               return;
             }
           }
-          if (e.key === "Enter" && !e.shiftKey) {
+          if (alEnter && e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            void enviar();
+            alEnter();
           }
         }}
-        className="min-h-16 w-full resize-y rounded-md border border-borde bg-superficie px-2 py-1.5 text-sm text-tinta outline-none placeholder:text-texto-suave focus:border-acento focus:ring-2 focus:ring-acento/20"
+        className={className}
       />
       {sugerencia && candidatos.length > 0 && (
         <ul
@@ -766,6 +763,53 @@ function FormularioComentario({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function FormularioComentario({
+  equipo,
+  alEnviar,
+}: {
+  equipo: MiembroEquipo[];
+  alEnviar: (texto: string) => Promise<void>;
+}) {
+  const [texto, setTexto] = useState("");
+  const [enviando, setEnviando] = useState(false);
+
+  async function enviar() {
+    const limpio = texto.trim();
+    if (!limpio || enviando) return;
+    setEnviando(true);
+    try {
+      await alEnviar(limpio);
+      setTexto("");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void enviar();
+      }}
+      className="flex flex-col gap-1.5"
+    >
+      <label className="sr-only" htmlFor="nuevo-comentario">
+        Nuevo comentario
+      </label>
+      <AreaMenciones
+        id="nuevo-comentario"
+        valor={texto}
+        alCambiar={setTexto}
+        equipo={equipo}
+        alEnter={() => void enviar()}
+        maxLength={2000}
+        placeholder="Escribe un comentario… usa @ para mencionar"
+        className="min-h-16 w-full resize-y rounded-md border border-borde bg-superficie px-2 py-1.5 text-sm text-tinta outline-none placeholder:text-texto-suave focus:border-acento focus:ring-2 focus:ring-acento/20"
+      />
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] text-texto-suave">
           Enter envía · Shift+Enter salta de línea
@@ -1131,6 +1175,7 @@ export function Tablero({
       setAnuncio("No se pudo crear la tarjeta.");
       return false;
     }
+    void avisarMencionesDescripcion(data.id, d.descripcion, null);
 
     let asignados: string[] = [];
     if (d.asignados.length > 0) {
@@ -1188,6 +1233,7 @@ export function Tablero({
       setAnuncio("No se pudieron guardar los cambios.");
       return false;
     }
+    void avisarMencionesDescripcion(t.id, d.descripcion, t.descripcion);
 
     const antes = new Set(t.asignados);
     const despues = new Set(d.asignados);
@@ -1472,6 +1518,38 @@ export function Tablero({
       throw new Error(error?.message ?? "sin datos");
     }
     setComentarios((prev) => [...prev, data]);
+  }
+
+  /**
+   * Menciones en la descripción: quien aparece por primera vez recibe
+   * aviso. Como los avisos los genera la BD al insertar comentarios,
+   * se deja un comentario automático del autor mencionándolos; queda
+   * además como rastro en el hilo. Sin hilo (019 sin ejecutar) no hay
+   * aviso, pero la mención sigue resaltada en el texto.
+   */
+  async function avisarMencionesDescripcion(
+    tarjetaId: string,
+    descripcionNueva: string,
+    descripcionVieja: string | null,
+  ) {
+    if (!hiloDisponible) return;
+    const antes = new Set(mencionesEn(descripcionVieja ?? "", equipo));
+    const nuevas = mencionesEn(descripcionNueva, equipo).filter(
+      (id) => id !== personaId && !antes.has(id),
+    );
+    if (nuevas.length === 0) return;
+    const nombres = nuevas.map((id) => `@${nombrePersona.get(id) ?? "?"}`);
+    const { data } = await supabase
+      .from("tarjeta_comentarios")
+      .insert({
+        tarjeta_id: tarjetaId,
+        persona_id: personaId,
+        texto: `Os menciono en la descripción de la tarjeta: ${nombres.join(", ")}`,
+        menciones: nuevas,
+      })
+      .select()
+      .single();
+    if (data) setComentarios((prev) => [...prev, data]);
   }
 
   async function borrarComentario(c: TarjetaComentario) {
@@ -1795,7 +1873,10 @@ export function Tablero({
 
           {descripcionSinMarca(t.descripcion) && (
             <p className="line-clamp-3 text-xs leading-relaxed whitespace-pre-wrap text-texto-suave">
-              {descripcionSinMarca(t.descripcion)}
+              <TextoConMenciones
+                texto={descripcionSinMarca(t.descripcion)}
+                equipo={equipo}
+              />
             </p>
           )}
         </div>
@@ -2122,7 +2203,10 @@ export function Tablero({
 
           {descripcionSinMarca(t.descripcion) && (
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-texto">
-              {descripcionSinMarca(t.descripcion)}
+              <TextoConMenciones
+                texto={descripcionSinMarca(t.descripcion)}
+                equipo={equipo}
+              />
             </p>
           )}
 
