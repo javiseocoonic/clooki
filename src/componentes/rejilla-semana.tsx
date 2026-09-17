@@ -1005,6 +1005,14 @@ export function RejillaSemana({
     }
     setTarjetasMias((prev) => prev.filter((t) => t.id !== tarjeta.id));
     mostrarBadge(`«${tarjeta.titulo}» hecha ✓`);
+    // Hecha: si su cronómetro sigue corriendo, se para (vuelca el tiempo).
+    if (crono) {
+      const tarea = limpiarTarea(tarjeta.titulo);
+      const sesion = crono.sesiones.find(
+        (s) => s.proyecto_id === tarjeta.proyecto_id && s.tarea === tarea,
+      );
+      if (sesion) void crono.parar(sesion.id);
+    }
     // Si la creó otra persona, que le llegue el aviso de revisarla.
     void avisarHecha(supabase, tarjeta, personaId);
   }

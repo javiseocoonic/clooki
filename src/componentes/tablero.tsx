@@ -1501,6 +1501,14 @@ export function Tablero({
       return;
     }
     setAnuncio(`«${t.titulo}» → ${ETIQUETA_ESTADO[estado]}.`);
+    // Hecha: si su cronómetro sigue corriendo, se para (vuelca el tiempo).
+    if (estado === "hecha" && crono) {
+      const tarea = limpiarTarea(t.titulo);
+      const sesion = crono.sesiones.find(
+        (s) => s.proyecto_id === t.proyecto_id && s.tarea === tarea,
+      );
+      if (sesion) void crono.parar(sesion.id);
+    }
     // Hecha por otra persona: aviso al creador (vía comentario automático).
     if (estado === "hecha" && hiloDisponible) {
       const c = await avisarHecha(
@@ -1801,8 +1809,14 @@ export function Tablero({
     return (
       <button
         type="button"
-        onClick={() => void crono.arrancar(t.proyecto_id, tarea)}
-        title="Empezar a trabajar (el tiempo cuenta en Mi semana)"
+        onClick={() =>
+          void (async () => {
+            // Play = empiezo: una pendiente pasa a «en curso» sola.
+            const ok = await crono.arrancar(t.proyecto_id, tarea);
+            if (ok && t.estado === "pendiente") await cambiarEstado(t, "en_curso");
+          })()
+        }
+        title="Empezar a trabajar (el tiempo cuenta en Mi semana; pasa a En curso)"
         aria-label={`Empezar a trabajar en «${t.titulo}»`}
         className={`${BOTON_ICONO} h-8 w-8 hover:text-acento`}
       >
