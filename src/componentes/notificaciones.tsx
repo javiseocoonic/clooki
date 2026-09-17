@@ -76,11 +76,28 @@ export function Notificaciones({
     }
     document.addEventListener("visibilitychange", alVolver);
     window.addEventListener("focus", alVolver);
+    // Tiempo real (021): si la tabla está en la publicación de Realtime,
+    // cada aviso nuevo llega al instante; si no, no pasa nada y queda el
+    // refresco periódico. RLS filtra: solo llegan los propios.
+    const canal = supabase
+      .channel(`avisos-${personaId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notificaciones",
+          filter: `persona_id=eq.${personaId}`,
+        },
+        () => void refrescar(),
+      )
+      .subscribe();
     return () => {
       cancelado = true;
       window.clearInterval(temporizador);
       document.removeEventListener("visibilitychange", alVolver);
       window.removeEventListener("focus", alVolver);
+      void supabase.removeChannel(canal);
     };
   }, [supabase, personaId]);
 
