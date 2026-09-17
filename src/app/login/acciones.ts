@@ -35,7 +35,11 @@ export async function iniciarSesion(
     return { mensaje: "Correo o contraseña incorrectos." };
   }
 
-  redirect("/");
+  // Volver a donde se iba (p. ej. el enlace a una tarjeta). Solo rutas
+  // internas: una ruta absoluta o «//host» sería un salto a otro sitio.
+  const next = String(formulario.get("next") ?? "");
+  const destino = next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  redirect(destino);
 }
 
 export async function cerrarSesion(): Promise<void> {

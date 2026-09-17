@@ -23,7 +23,7 @@ export default async function PaginaTareas({
   // reabre la tarjeta al ver cambiar esta clave.
   const claveApertura = [detalleInicial, comentarioInicial, v ?? ""].join("|");
 
-  const datos = await cargarTareas(verArchivadas);
+  const datos = await cargarTareas(verArchivadas, detalleInicial);
   if (!datos) redirect("/");
 
   const { persona } = datos;

@@ -46,8 +46,11 @@ export async function proxy(request: NextRequest) {
 
   if (!user && !esRutaPublica) {
     const url = request.nextUrl.clone();
+    // Se conserva a dónde iba (p. ej. un enlace a una tarjeta) para
+    // volver ahí tras entrar; la portada no hace falta recordarla.
+    const destino = request.nextUrl.pathname + request.nextUrl.search;
     url.pathname = "/login";
-    url.search = "";
+    url.search = destino !== "/" ? `?next=${encodeURIComponent(destino)}` : "";
     return NextResponse.redirect(url);
   }
 

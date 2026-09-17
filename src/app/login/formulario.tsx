@@ -6,7 +6,7 @@ import { CampoContrasena } from "@/componentes/campo-contrasena";
 
 const ESTADO_INICIAL: EstadoLogin = { mensaje: null };
 
-export function FormularioLogin() {
+export function FormularioLogin({ next }: { next: string | null }) {
   const [estado, accion, pendiente] = useActionState(
     iniciarSesion,
     ESTADO_INICIAL,
@@ -14,6 +14,8 @@ export function FormularioLogin() {
 
   return (
     <form action={accion} className="flex flex-col gap-3">
+      {/* A dónde volver tras entrar (enlace a una tarjeta, etc.). */}
+      {next && <input type="hidden" name="next" value={next} />}
       <label htmlFor="email" className="text-sm font-medium text-texto">
         Tu correo de Coonic
       </label>

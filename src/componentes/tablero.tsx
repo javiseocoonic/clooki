@@ -875,6 +875,21 @@ export function Tablero({
   const [clienteMovil, setClienteMovil] = useState<string | null>(null);
   // Detalle tipo Trello: id de la tarjeta cuyo modal está abierto (evita
   // tarjetas kilométricas en el tablero cuando la descripción es larga).
+  /** id de la tarjeta cuyo enlace se acaba de copiar (aviso «copiado»). */
+  const [enlaceCopiado, setEnlaceCopiado] = useState<string | null>(null);
+  async function copiarEnlace(t: TarjetaTablero) {
+    const url = `${window.location.origin}/tareas?tarjeta=${t.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setEnlaceCopiado(t.id);
+      setAnuncio("Enlace copiado al portapapeles.");
+      window.setTimeout(() => setEnlaceCopiado(null), 2500);
+    } catch {
+      // Sin permiso de portapapeles (http, iframe…): que al menos se vea.
+      window.prompt("Copia el enlace a la tarjeta:", url);
+    }
+  }
+
   // Abierta desde fuera (/tareas?tarjeta=id, p. ej. desde «Mis tareas»):
   // solo si está cargada; una archivada no viene sin «ver archivadas».
   const [detalle, setDetalle] = useState<string | null>(() =>
@@ -2301,6 +2316,34 @@ export function Tablero({
               }`}
             >
               {t.asignados.includes(personaId) ? "Salirme" : "La cojo"}
+            </button>
+            {/* Compartir: copia la URL propia de la tarjeta. Quien la abra
+                (del equipo y con sesión) verá esta misma ficha. */}
+            <button
+              type="button"
+              onClick={() => void copiarEnlace(t)}
+              title="Copiar el enlace a esta tarjeta"
+              aria-label="Copiar el enlace a esta tarjeta"
+              className={`inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-acento ${
+                enlaceCopiado === t.id
+                  ? "bg-exito-suave text-exito"
+                  : "text-texto-suave hover:bg-superficie-2 hover:text-tinta"
+              }`}
+            >
+              <svg
+                viewBox="0 0 16 16"
+                className="h-3.5 w-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M6.5 9.5a2.5 2.5 0 0 0 3.5 0l2.5-2.5a2.5 2.5 0 0 0-3.5-3.5L8 4.5" />
+                <path d="M9.5 6.5a2.5 2.5 0 0 0-3.5 0L3.5 9a2.5 2.5 0 0 0 3.5 3.5L8 11.5" />
+              </svg>
+              {enlaceCopiado === t.id ? "Enlace copiado" : "Compartir"}
             </button>
             {puedeEditar(t) && (
               <button

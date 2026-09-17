@@ -42,6 +42,9 @@ export interface DatosTareas {
  */
 export async function cargarTareas(
   incluirArchivadas = false,
+  /** Tarjeta pedida por enlace (?tarjeta=id): si está archivada y no
+   *  entra en la carga normal, se trae aparte para poder abrirla. */
+  tarjetaPedida: string | null = null,
 ): Promise<DatosTareas | null> {
   const supabase = await crearClienteServidor();
 
@@ -104,6 +107,17 @@ export async function cargarTareas(
 
   const proyectos = proyectosRes.data ?? [];
 
+  // Enlace a una tarjeta archivada: no viene en la carga normal.
+  let filasTarjetas = tarjetasRes.data ?? [];
+  if (tarjetaPedida && !filasTarjetas.some((t) => t.id === tarjetaPedida)) {
+    const { data: extra } = await supabase
+      .from("tarjetas")
+      .select("*")
+      .eq("id", tarjetaPedida)
+      .maybeSingle();
+    if (extra) filasTarjetas = [...filasTarjetas, extra];
+  }
+
   const asignadosPorTarjeta = new Map<string, string[]>();
   for (const a of asignacionesRes.data ?? []) {
     const lista = asignadosPorTarjeta.get(a.tarjeta_id);
@@ -118,7 +132,7 @@ export async function cargarTareas(
       proyectos: proyectos.filter((p) => p.cliente_id === c.id),
     })),
     equipo: equipoRes.data ?? [],
-    tarjetas: (tarjetasRes.data ?? []).map((t) => ({
+    tarjetas: filasTarjetas.map((t) => ({
       ...t,
       asignados: asignadosPorTarjeta.get(t.id) ?? [],
     })),
