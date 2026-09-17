@@ -1368,8 +1368,12 @@ export function Tablero({
     return true;
   }
 
-  async function cambiarEstado(t: TarjetaTablero) {
-    const estado = SIGUIENTE_ESTADO[t.estado];
+  /** Sin `destino`, avanza al siguiente estado (chip de la tarjeta); con
+   *  él, va directo (selector explícito del detalle). Abrir una tarjeta
+   *  nunca cambia su estado: solo estos botones. */
+  async function cambiarEstado(t: TarjetaTablero, destino?: EstadoTarjeta) {
+    const estado = destino ?? SIGUIENTE_ESTADO[t.estado];
+    if (estado === t.estado) return;
     const previo = t.estado;
     // Optimista: hecha_en real lo fija el trigger; localmente basta para
     // plegar/desplegar (el valor exacto llega al recargar).
@@ -2306,14 +2310,31 @@ export function Tablero({
           )}
 
           <div className="flex flex-wrap items-center gap-1.5 border-t border-borde pt-3">
-            <button
-              type="button"
-              onClick={() => void cambiarEstado(t)}
-              title={`Pasar a ${ETIQUETA_ESTADO[SIGUIENTE_ESTADO[t.estado]]}`}
-              className={`h-8 rounded-full px-2.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-acento ${CHIP_ESTADO[t.estado]}`}
+            {/* Estado explícito (no cíclico): al llegar desde un aviso
+                «está hecha, revísala» se ve claro en qué estado está y
+                se elige a dónde llevarla, sin cambios accidentales. */}
+            <div
+              role="group"
+              aria-label="Estado"
+              className="inline-flex items-center gap-0.5 rounded-full bg-superficie-2 p-0.5"
             >
-              {ETIQUETA_ESTADO[t.estado]}
-            </button>
+              {(["pendiente", "en_curso", "hecha"] as const).map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  aria-pressed={t.estado === e}
+                  onClick={() => void cambiarEstado(t, e)}
+                  title={t.estado === e ? "Estado actual" : `Pasar a ${ETIQUETA_ESTADO[e]}`}
+                  className={`h-7 rounded-full px-2.5 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-acento ${
+                    t.estado === e
+                      ? CHIP_ESTADO[e]
+                      : "text-texto-suave hover:text-tinta"
+                  }`}
+                >
+                  {ETIQUETA_ESTADO[e]}
+                </button>
+              ))}
+            </div>
             {botonCronometro(t)}
             <button
               type="button"
