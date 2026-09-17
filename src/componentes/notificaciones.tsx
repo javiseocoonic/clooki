@@ -8,7 +8,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { crearClienteNavegador } from "@/lib/supabase/navegador";
 import { PREFIJO_HECHA } from "@/lib/avisos";
-import type { NotificacionVista } from "@/lib/datos/notificaciones";
+import {
+  consultarNotificaciones,
+  type NotificacionVista,
+} from "@/lib/notificaciones-consulta";
+
+/** Cada cuánto se refresca la campana sin recargar la página. */
+const INTERVALO_MS = 30_000;
 
 /** «hace 5 min», «hace 3 h», «ayer», «12 sep». */
 function haceCuanto(iso: string): string {
@@ -28,9 +34,11 @@ function haceCuanto(iso: string): string {
 }
 
 export function Notificaciones({
+  personaId,
   iniciales,
   claseEnlace,
 }: {
+  personaId: string;
   iniciales: NotificacionVista[];
   /** Misma clase que las pestañas vecinas de la cabecera. */
   claseEnlace: string;
@@ -44,6 +52,37 @@ export function Notificaciones({
   const contadorRef = useRef(0);
 
   const sinLeer = avisos.filter((a) => !a.leida_en).length;
+
+  // Refresco sin recargar: cada INTERVALO_MS y al volver a la pestaña.
+  // Se conserva lo ya marcado leído en local por si la escritura aún
+  // está en vuelo cuando llega la lista nueva.
+  useEffect(() => {
+    let cancelado = false;
+    async function refrescar() {
+      if (document.visibilityState === "hidden") return;
+      const frescos = await consultarNotificaciones(supabase, personaId);
+      if (cancelado || frescos === null) return;
+      setAvisos((prev) => {
+        const leidas = new Map(prev.map((a) => [a.id, a.leida_en]));
+        return frescos.map((a) => ({
+          ...a,
+          leida_en: a.leida_en ?? leidas.get(a.id) ?? null,
+        }));
+      });
+    }
+    const temporizador = window.setInterval(() => void refrescar(), INTERVALO_MS);
+    function alVolver() {
+      if (document.visibilityState === "visible") void refrescar();
+    }
+    document.addEventListener("visibilitychange", alVolver);
+    window.addEventListener("focus", alVolver);
+    return () => {
+      cancelado = true;
+      window.clearInterval(temporizador);
+      document.removeEventListener("visibilitychange", alVolver);
+      window.removeEventListener("focus", alVolver);
+    };
+  }, [supabase, personaId]);
 
   // Cerrar al pulsar fuera o con Escape.
   useEffect(() => {

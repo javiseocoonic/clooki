@@ -51,7 +51,11 @@ export async function Cabecera({
           Tareas
         </Link>
         {avisos !== null && (
-          <Notificaciones iniciales={avisos} claseEnlace={claseEnlace(false)} />
+          <Notificaciones
+            personaId={persona.id}
+            iniciales={avisos}
+            claseEnlace={claseEnlace(false)}
+          />
         )}
         <Link
           href="/vacaciones"
