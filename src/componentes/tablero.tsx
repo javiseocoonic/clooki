@@ -910,6 +910,61 @@ export function Tablero({
   const [tipoFiltro, setTipoFiltro] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState<EstadoTarjeta | "">("");
   const [personaFiltro, setPersonaFiltro] = useState("");
+
+  // Los filtros se recuerdan por persona en este navegador (Javi, 17 sep
+  // 2026): quien siempre mira «Diseño · Mías» no tiene que ponerlo cada
+  // día. Se leen tras montar (en servidor no hay localStorage) y se
+  // guardan en cada cambio. Todo entre try/catch: el almacenamiento puede
+  // estar bloqueado (privado, cuota…) y el tablero debe seguir igual.
+  const claveFiltros = `clooki:filtros:${personaId}`;
+  const filtrosCargados = useRef(false);
+  useEffect(() => {
+    let crudo: string | null = null;
+    try {
+      crudo = window.localStorage.getItem(claveFiltros);
+    } catch {
+      // sin almacenamiento: filtros por defecto
+    }
+    // Se aplica en una microtarea (fuera del cuerpo del efecto) para no
+    // encadenar renders síncronos; en la práctica es inmediato.
+    queueMicrotask(() => {
+      if (crudo) {
+        try {
+          const f = JSON.parse(crudo) as Partial<{
+            vista: "todas" | "mias" | "creadas";
+            tipo: string;
+            estado: EstadoTarjeta | "";
+            persona: string;
+          }>;
+          if (f.vista === "todas" || f.vista === "mias" || f.vista === "creadas")
+            setVista(f.vista);
+          if (typeof f.tipo === "string") setTipoFiltro(f.tipo);
+          if (f.estado === "" || f.estado === "pendiente" || f.estado === "en_curso" || f.estado === "hecha")
+            setEstadoFiltro(f.estado);
+          if (typeof f.persona === "string") setPersonaFiltro(f.persona);
+        } catch {
+          // JSON corrupto: se ignora
+        }
+      }
+      filtrosCargados.current = true;
+    });
+  }, [claveFiltros]);
+  useEffect(() => {
+    if (!filtrosCargados.current) return;
+    try {
+      window.localStorage.setItem(
+        claveFiltros,
+        JSON.stringify({
+          vista,
+          tipo: tipoFiltro,
+          estado: estadoFiltro,
+          persona: personaFiltro,
+        }),
+      );
+    } catch {
+      // sin almacenamiento: no se recuerda, sin más
+    }
+  }, [claveFiltros, vista, tipoFiltro, estadoFiltro, personaFiltro]);
   // Buscador de cliente: oculta columnas enteras según se teclea. No
   // entra en filtroActivo: no deja huecos DENTRO de una columna, así
   // que reordenar con él activo sigue siendo seguro.
