@@ -1080,7 +1080,33 @@ export function Tablero({
         },
       )
       .subscribe();
+
+    // Red de seguridad para los borrados: aunque se pierda el evento,
+    // cada minuto (y al volver a la pestaña) se cotejan los ids que
+    // siguen en la BD y se quita lo que ya no exista. Solo ids: barato.
+    let cancelado = false;
+    async function cotejar() {
+      if (document.visibilityState === "hidden") return;
+      const { data, error } = await supabase.from("tarjetas").select("id");
+      if (cancelado || error || !data) return;
+      const vivas = new Set(data.map((t) => t.id));
+      setTarjetas((prev) =>
+        prev.some((t) => !vivas.has(t.id))
+          ? prev.filter((t) => vivas.has(t.id))
+          : prev,
+      );
+      setDetalle((d) => (d && !vivas.has(d) ? null : d));
+    }
+    const temporizador = window.setInterval(() => void cotejar(), 60_000);
+    function alVolver() {
+      if (document.visibilityState === "visible") void cotejar();
+    }
+    document.addEventListener("visibilitychange", alVolver);
+
     return () => {
+      cancelado = true;
+      window.clearInterval(temporizador);
+      document.removeEventListener("visibilitychange", alVolver);
       void supabase.removeChannel(canal);
     };
   }, [supabase]);

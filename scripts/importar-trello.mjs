@@ -28,9 +28,15 @@
 //   (o al nombre completo de Trello si esa persona ya no está) y además
 //   ASIGNAN la tarjeta a esa persona, igual que ser miembro de ella.
 //
+// MIGRACIÓN TERMINADA (Javi, 17 sep 2026): los tres tableros (Audiovisual,
+// Diseño, WEB) se pasaron el 16 sep y desde entonces Clooki es la fuente
+// de verdad. El equipo borra y reorganiza tarjetas aquí; volver a
+// sincronizar RECREARÍA lo borrado (el JSON manda). Por eso --ejecutar
+// exige además --forzar: solo para una migración nueva y a sabiendas.
+//
 // Uso:
-//   node scripts/importar-trello.mjs [ruta.json]            → ensayo
-//   node scripts/importar-trello.mjs [ruta.json] --ejecutar → escribe
+//   node scripts/importar-trello.mjs [ruta.json]                     → ensayo
+//   node scripts/importar-trello.mjs [ruta.json] --ejecutar --forzar → escribe
 //
 // El ensayo sin clave solo clasifica el JSON; con la clave además lista
 // qué se pisaría y qué se borraría. --ejecutar requiere
@@ -625,8 +631,16 @@ console.log("\n" + lineas.slice(-(aBorrar.length + (aBorrar.length ? 3 : 1))).jo
 console.log(`\nInforme completo: scripts/informe-trello.txt`);
 
 if (!ejecutar) {
-  console.log("\nEnsayo: no se ha escrito nada. Añade --ejecutar para sincronizar.");
+  console.log("\nEnsayo: no se ha escrito nada. Añade --ejecutar --forzar para sincronizar.");
   process.exit(0);
+}
+if (!argv.includes("--forzar")) {
+  console.error(
+    "\nLa migración desde Trello se dio por terminada el 16 sep 2026: Clooki es" +
+      " la fuente de verdad y el equipo ya borra tarjetas aquí. Sincronizar" +
+      " RECREARÍA lo borrado. Si de verdad quieres escribir, añade --forzar.",
+  );
+  process.exit(1);
 }
 
 // ---------- Escritura ----------
