@@ -10,7 +10,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { crearClienteNavegador } from "@/lib/supabase/navegador";
 import { limpiarTarea } from "@/lib/semana";
-import { avisarHecha } from "@/lib/avisos";
+import { avisarHecha, avisarReabierta } from "@/lib/avisos";
 import {
   ETIQUETAS,
   ETIQUETA_POR_CLAVE,
@@ -589,7 +589,11 @@ function mencionesEn(texto: string, equipo: MiembroEquipo[]): string[] {
   return [...ids];
 }
 
-/** Texto del comentario con las menciones resaltadas. */
+/** Direcciones web dentro de un texto: http(s)://… o www.… */
+const RE_URL = /\bhttps?:\/\/[^\s<>"')\]]+|\bwww\.[^\s<>"')\]]+/g;
+
+/** Texto de comentario o descripción con menciones resaltadas y
+ *  enlaces pinchables (se abren en otra pestaña). */
 function TextoConMenciones({
   texto,
   equipo,
@@ -597,22 +601,57 @@ function TextoConMenciones({
   texto: string;
   equipo: MiembroEquipo[];
 }) {
-  const re = regexMenciones(equipo);
-  if (!re) return <>{texto}</>;
+  const reMenciones = regexMenciones(equipo);
+  // Se recogen todas las marcas (menciones y enlaces), se ordenan por
+  // posición y se pintan sin solapes (gana la primera).
+  const marcas: { inicio: number; fin: number; nodo: React.ReactNode }[] = [];
+  if (reMenciones) {
+    for (const m of texto.matchAll(reMenciones)) {
+      const inicio = m.index ?? 0;
+      marcas.push({
+        inicio,
+        fin: inicio + m[0].length,
+        nodo: (
+          <span
+            key={`m-${inicio}`}
+            className="rounded bg-acento-suave px-1 font-medium text-acento"
+          >
+            @{m[1]}
+          </span>
+        ),
+      });
+    }
+  }
+  for (const m of texto.matchAll(RE_URL)) {
+    const inicio = m.index ?? 0;
+    // La puntuación final («.», «,») no suele ser parte del enlace.
+    const crudo = m[0].replace(/[.,;:!?]+$/, "");
+    const href = crudo.startsWith("www.") ? `https://${crudo}` : crudo;
+    marcas.push({
+      inicio,
+      fin: inicio + crudo.length,
+      nodo: (
+        <a
+          key={`u-${inicio}`}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="break-all text-acento underline decoration-acento/40 underline-offset-2 hover:decoration-acento"
+        >
+          {crudo}
+        </a>
+      ),
+    });
+  }
+  if (marcas.length === 0) return <>{texto}</>;
+  marcas.sort((a, b) => a.inicio - b.inicio);
   const trozos: React.ReactNode[] = [];
   let ultimo = 0;
-  for (const m of texto.matchAll(re)) {
-    const inicio = m.index ?? 0;
-    if (inicio > ultimo) trozos.push(texto.slice(ultimo, inicio));
-    trozos.push(
-      <span
-        key={`${inicio}-${m[1]}`}
-        className="rounded bg-acento-suave px-1 font-medium text-acento"
-      >
-        @{m[1]}
-      </span>,
-    );
-    ultimo = inicio + m[0].length;
+  for (const marca of marcas) {
+    if (marca.inicio < ultimo) continue; // solape: ya pintado
+    if (marca.inicio > ultimo) trozos.push(texto.slice(ultimo, marca.inicio));
+    trozos.push(marca.nodo);
+    ultimo = marca.fin;
   }
   if (ultimo < texto.length) trozos.push(texto.slice(ultimo));
   return <>{trozos}</>;
@@ -1589,6 +1628,17 @@ export function Tablero({
         (s) => s.proyecto_id === t.proyecto_id && s.tarea === tarea,
       );
       if (sesion) void crono.parar(sesion.id);
+    }
+    // Reabierta (de hecha a pendiente/en curso): aviso a las asignadas.
+    if (previo === "hecha" && estado !== "hecha" && hiloDisponible) {
+      const c = await avisarReabierta(
+        supabase,
+        t,
+        t.asignados.map((id) => ({ id, nombre: nombrePersona.get(id) ?? "?" })),
+        estado,
+        personaId,
+      );
+      if (c) setComentarios((prev) => [...prev, c]);
     }
     // Hecha por otra persona: aviso al creador (vía comentario automático).
     if (estado === "hecha" && hiloDisponible) {
@@ -2625,7 +2675,7 @@ export function Tablero({
         }`}
       >
         <header className="flex items-center justify-between gap-1">
-          <h2 className="text-[11px] font-medium uppercase tracking-wide text-texto-suave">
+          <h2 className="truncate text-xs font-semibold uppercase tracking-wide text-tinta">
             {c.nombre}
           </h2>
           <button
